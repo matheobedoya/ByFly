@@ -2,8 +2,7 @@ export const CONFIG = {
   whatsapp: "573147397938",
   minimoMayorista: 130000,
   adminPassword: "byfly2024",
-  // Paste the Apps Script Web App URL here after deploying doPost (see admin panel guide)
-  scriptsWriteUrl: "",
+  scriptsWriteUrl: "https://script.google.com/macros/s/AKfycby1NhUcCDMzNT1Ad4DnsRbTQKWFvGbBWTd3a1-ziXSPfvLfwAaIp9TMawcSKfR7aR8dhg/exec",
   logo: "/ilogo-byfly.png",
   brandName: "BYFLY",
   brandSub: "makeup",
