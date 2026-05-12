@@ -93,7 +93,7 @@ export function ProductCard({ product: p }: ProductCardProps) {
       </div>
 
       {/* Product info */}
-      <div className="p-[13px_14px_14px] flex-1 flex flex-col">
+      <div className="p-[10px_10px_12px] flex-1 flex flex-col min-w-0">
         {p.brand && (
           <div className="text-[10px] text-pink font-semibold uppercase tracking-[1.5px] mb-[3px]">
             {p.brand}
@@ -138,11 +138,11 @@ export function ProductCard({ product: p }: ProductCardProps) {
 
         {/* Tone chips */}
         {tieneVariantesTono && !agotado && !p.surtido && (
-          <div className="mb-2.5">
-            <div className="text-[10px] text-[#9e9e9e] font-medium mb-1">
+          <div className="mb-2.5 min-w-0">
+            <div className="text-[9px] text-[#9e9e9e] font-medium mb-1">
               Elige un tono:
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-[3px]">
               {p.variantes
                 .filter((v) => v.tono)
                 .map((v) => {
@@ -163,7 +163,7 @@ export function ProductCard({ product: p }: ProductCardProps) {
                           tono: v.tono,
                         })
                       }
-                      className={`px-[9px] py-[3px] rounded-[20px] border-[1.5px] text-[11px] cursor-pointer transition-all font-sans ${
+                      className={`px-[6px] py-[2px] rounded-[20px] border text-[9px] cursor-pointer transition-all font-sans max-w-full truncate ${
                         agotadaV
                           ? "opacity-40 line-through cursor-not-allowed border-[#e0e0e0] text-[#bbb] bg-[#fafafa]"
                           : ultimaV
