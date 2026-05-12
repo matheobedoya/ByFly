@@ -14,7 +14,7 @@ import { useStore } from "@/contexts/store"
 
 function ToastContent() {
   const { state } = useStore()
-  const { setSize } = useDynamicIslandSize()
+  const { setSize, dispatch } = useDynamicIslandSize()
   const prevToastId = useRef<number | null>(null)
 
   useEffect(() => {
@@ -22,12 +22,13 @@ function ToastContent() {
     prevToastId.current = state.toast.id
 
     // Animate: empty → compact → (wait) → empty
+    // Use dispatch directly to close — setSize guards against going back to previousSize
     setSize(SIZE_PRESETS.COMPACT)
     const timer = setTimeout(() => {
-      setSize(SIZE_PRESETS.EMPTY)
+      dispatch({ type: "SET_SIZE", newSize: SIZE_PRESETS.EMPTY })
     }, 2600)
     return () => clearTimeout(timer)
-  }, [state.toast, setSize])
+  }, [state.toast, setSize, dispatch])
 
   if (!state.toast) return null
 
