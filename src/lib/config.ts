@@ -16,7 +16,7 @@ export const CONFIG = {
   sheetsUrl:
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQo4RhtucI4m_U32VCNzNy2E33wCeXeO2NKTcDOFn1mDupdXtPsqDEPF6NFJDYRc6LNWJJpRAZLguIt/pub?gid=1817499306&single=true&output=csv",
   stockBajoUmbral: 1,
-  cacheTtlMs: 30 * 60 * 1000,
+  cacheTtlMs: 5 * 60 * 1000,
 } as const
 
 export const CAT_ICONS: Record<string, string> = {

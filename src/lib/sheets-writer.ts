@@ -8,6 +8,12 @@ import type { Product } from "@/types"
  */
 export function writeToSheets(products: Product[]): void {
   if (!CONFIG.scriptsWriteUrl) return
+
+  // Invalidate localStorage cache so next load fetches fresh data from Sheets
+  try {
+    localStorage.removeItem("byfly_products_ts")
+  } catch {}
+
   try {
     fetch(CONFIG.scriptsWriteUrl, {
       method: "POST",
