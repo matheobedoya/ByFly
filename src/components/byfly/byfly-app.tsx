@@ -8,6 +8,7 @@ import { ProductGrid } from "./product-grid"
 import { CartDrawer } from "./cart-drawer"
 import { AdminPanel } from "./admin-panel"
 import { IslandToast } from "./island-toast"
+import { SocialFab } from "./social-fab"
 
 export function ByflyApp() {
   return (
@@ -19,6 +20,7 @@ export function ByflyApp() {
       <ProductGrid />
       <CartDrawer />
       <AdminPanel />
+      <SocialFab />
     </StoreProvider>
   )
 }
