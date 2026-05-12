@@ -4,7 +4,7 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { CONFIG } from "@/lib/config"
 
-const INSTAGRAM_URL = "https://instagram.com/byflymakeup"
+const INSTAGRAM_URL = "https://instagram.com/byfly_makeup"
 const WHATSAPP_URL  = `https://wa.me/${CONFIG.whatsapp}`
 
 export function SocialFab() {
