@@ -18,14 +18,14 @@ export function ProductGallery({ product }: ProductGalleryProps) {
 
   if (!imgs.length) {
     return (
-      <div className="h-[155px] flex items-center justify-center text-5xl bg-gradient-to-br from-pink-light to-[#f8bbd0]">
+      <div className="aspect-square flex items-center justify-center text-5xl bg-gradient-to-br from-pink-light to-[#f8bbd0]">
         💄
       </div>
     )
   }
 
   return (
-    <div className="relative h-[155px] overflow-hidden bg-gradient-to-br from-pink-light to-[#f8bbd0]">
+    <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-pink-light to-[#f8bbd0]">
       {/* Slides */}
       <div
         className="flex h-full transition-transform duration-[350ms] ease-out"
