@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { useStore } from "@/contexts/store"
 import { CONFIG, CAT_ICONS } from "@/lib/config"
 import { parseCsv, isProductAgotado } from "@/lib/csv-parser"
+import { writeToSheets } from "@/lib/sheets-writer"
 import type { Product } from "@/types"
 // @ts-ignore - XLSX has no official types bundle
 import * as XLSX from "xlsx"
@@ -90,16 +91,15 @@ export function AdminPanel() {
     }
 
     const newId = Math.max(0, ...products.map((p) => p.id)) + 1
-    dispatch({
-      type: "ADD_LOCAL_PRODUCT",
-      product: {
-        id: newId, name, cat: addForm.cat, brand: marca,
-        detal, mayor: parseInt(addForm.mayor) || null,
-        img1: addForm.img1.trim(), img2: addForm.img2.trim(), img3: addForm.img3.trim(),
-        surtido: addForm.surtido === "si", badge: addForm.badge,
-        variantes: [variante],
-      },
-    })
+    const newProduct: Product = {
+      id: newId, name, cat: addForm.cat, brand: marca,
+      detal, mayor: parseInt(addForm.mayor) || null,
+      img1: addForm.img1.trim(), img2: addForm.img2.trim(), img3: addForm.img3.trim(),
+      surtido: addForm.surtido === "si", badge: addForm.badge,
+      variantes: [variante],
+    }
+    writeToSheets([...products, newProduct])
+    dispatch({ type: "ADD_LOCAL_PRODUCT", product: newProduct })
     setAddForm({ name: "", brand: "", cat: "Piel", badge: "", detal: "", mayor: "", img1: "", img2: "", img3: "", tono: "", stock: "", disponible: "si", surtido: "" })
     showOk("✅ ¡Producto agregado!")
   }
@@ -135,12 +135,16 @@ export function AdminPanel() {
     if (p && editForm.disponible === "no") {
       updates.variantes = p.variantes.map((v) => ({ ...v, disponible: false }))
     }
+    const updatedProds = products.map((p) => p.id === editingId ? { ...p, ...updates } : p)
+    writeToSheets(updatedProds)
     dispatch({ type: "UPDATE_LOCAL_PRODUCT", id: editingId, updates })
     showOk("✅ ¡Actualizado!")
   }
 
   const deleteSingle = (id: number) => {
     if (!confirm("¿Eliminar este producto?")) return
+    const remaining = products.filter((p) => p.id !== id)
+    writeToSheets(remaining)
     dispatch({ type: "DELETE_LOCAL_PRODUCTS", ids: [id] })
   }
 
@@ -174,6 +178,7 @@ export function AdminPanel() {
 
   const importCsv = () => {
     if (!csvData?.length || !confirm(`¿Reemplazar ${products.length} productos con ${csvData.length}?`)) return
+    writeToSheets(csvData)
     dispatch({ type: "REPLACE_PRODUCTS", products: csvData })
     setCsvData(null)
     setCsvPreview("")
@@ -248,6 +253,12 @@ export function AdminPanel() {
                   </button>
                 ))}
               </div>
+
+              {!CONFIG.scriptsWriteUrl && (
+                <div className="px-[13px] py-[9px] bg-[#fff8e1] text-[#f57f17] rounded-[10px] text-[12px] mb-4 leading-relaxed">
+                  ⚠️ <strong>Sync con Sheets desactivado.</strong> Los cambios se guardan localmente y se pierden al recargar. Configura <code className="bg-[#fff3cd] px-1 rounded">scriptsWriteUrl</code> en config.ts para persistir en Google Sheets.
+                </div>
+              )}
 
               {okMsg && (
                 <div className="px-[13px] py-[9px] bg-[#e8f5e9] text-[#2e7d32] rounded-[10px] text-[13px] mb-4">
@@ -328,7 +339,7 @@ export function AdminPanel() {
                     <button onClick={addProduct} className={BTN_PINK}>✅ Agregar</button>
                     <button onClick={() => setAddForm({ name: "", brand: "", cat: "Piel", badge: "", detal: "", mayor: "", img1: "", img2: "", img3: "", tono: "", stock: "", disponible: "si", surtido: "" })} className={BTN_OUTLINE}>Limpiar</button>
                   </div>
-                  <p className="text-[11px] text-[#9e9e9e] leading-relaxed">💡 Para cambios permanentes usa tu Google Sheet. Una fila por tono.</p>
+                  <p className="text-[11px] text-[#9e9e9e] leading-relaxed">💡 Los cambios se sincronizan automáticamente con Google Sheets si <code className="bg-[#f5f5f5] px-1 rounded">scriptsWriteUrl</code> está configurado.</p>
                 </div>
               )}
 
@@ -449,8 +460,10 @@ export function AdminPanel() {
               {activeTab === "info" && (
                 <div className="bg-pink-soft rounded-[14px] p-[18px] border border-[#f0d0dc] text-[13px] leading-[1.8] text-[#555]">
                   <strong className="text-pink-dark text-sm">💡 Guía rápida</strong><br /><br />
-                  <strong>¿Se actualizan los cambios del Sheet automáticamente?</strong><br />
-                  No inmediatamente. El catálogo tiene un caché de 30 min. Admin → Lista → <strong>Recargar desde Sheets</strong>.<br /><br />
+                  <strong>¿Cómo funciona el sync con Google Sheets?</strong><br />
+                  Cada vez que agregas, editas o eliminas un producto, el catálogo completo se envía al Apps Script Web App y reemplaza la hoja. Requiere configurar <code className="bg-[#f5f5f5] px-1 rounded">scriptsWriteUrl</code> en <code className="bg-[#f5f5f5] px-1 rounded">src/lib/config.ts</code>.<br /><br />
+                  <strong>¿Los cambios se ven de inmediato en el catálogo?</strong><br />
+                  El catálogo tiene caché de 30 min. Usa Admin → Lista → <strong>Recargar desde Sheets</strong> para ver los cambios al instante.<br /><br />
                   <strong>Estructura — una fila por tono:</strong><br />
                   Solo rellena categoría, precios e imágenes en la primera fila. Las demás solo necesitan <code className="bg-[#f5f5f5] px-1 py-[1px] rounded">nombre</code>, <code className="bg-[#f5f5f5] px-1 py-[1px] rounded">tono</code>, <code className="bg-[#f5f5f5] px-1 py-[1px] rounded">disponible</code> y <code className="bg-[#f5f5f5] px-1 py-[1px] rounded">stock</code>.<br /><br />
                   <strong>Última unidad:</strong> cuando queda exactamente 1 unidad de un tono, el chip se pone en rojo.<br /><br />
