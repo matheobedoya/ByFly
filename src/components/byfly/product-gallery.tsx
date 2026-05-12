@@ -37,7 +37,7 @@ export function ProductGallery({ product }: ProductGalleryProps) {
               src={src}
               alt={product.name}
               fill
-              className="object-cover"
+              className="object-contain"
               loading="lazy"
               sizes="(max-width: 640px) 50vw, 215px"
               onError={(e) => {
