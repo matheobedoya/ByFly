@@ -2,7 +2,7 @@ export const CONFIG = {
   whatsapp: "573147397938",
   minimoMayorista: 130000,
   adminPassword: "tuyyo4ever",
-  scriptsWriteUrl: "https://script.google.com/macros/s/AKfycby1NhUcCDMzNT1Ad4DnsRbTQKWFvGbBWTd3a1-ziXSPfvLfwAaIp9TMawcSKfR7aR8dhg/exec",
+  scriptsWriteUrl: "https://script.google.com/macros/s/AKfycbwY98-Nu5gSyP0j7ddOyKO7cK4Z9EicR8i6gTMO3Yec2uzIIPQJ0-KBVQj8shcV8b584g/exec",
   logo: "/ilogo-byfly.png",
   brandName: "BYFLY",
   brandSub: "makeup",
