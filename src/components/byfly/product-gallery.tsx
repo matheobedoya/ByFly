@@ -10,22 +10,27 @@ interface ProductGalleryProps {
 
 export function ProductGallery({ product }: ProductGalleryProps) {
   const [idx, setIdx] = useState(0)
+  const [failedImgs, setFailedImgs] = useState<Set<number>>(new Set())
+
   const imgs = [product.img1, product.img2, product.img3].filter(Boolean)
 
   const goTo = (i: number) => {
     setIdx(((i % imgs.length) + imgs.length) % imgs.length)
   }
 
+  const markFailed = (i: number) =>
+    setFailedImgs((prev) => new Set([...prev, i]))
+
   if (!imgs.length) {
     return (
-      <div className="aspect-[4/3] flex items-center justify-center text-5xl bg-gradient-to-br from-pink-light to-[#f8bbd0]">
+      <div className="aspect-square flex items-center justify-center text-5xl bg-gradient-to-br from-pink-light to-[#f8bbd0]">
         💄
       </div>
     )
   }
 
   return (
-    <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-pink-light to-[#f8bbd0]">
+    <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-pink-light to-[#f8bbd0]">
       {/* Slides */}
       <div
         className="flex h-full transition-transform duration-[350ms] ease-out"
@@ -33,17 +38,21 @@ export function ProductGallery({ product }: ProductGalleryProps) {
       >
         {imgs.map((src, i) => (
           <div key={i} className="min-w-full h-full flex-shrink-0 relative">
-            <Image
-              src={src}
-              alt={product.name}
-              fill
-              className="object-cover"
-              loading="lazy"
-              sizes="(max-width: 640px) 50vw, 215px"
-              onError={(e) => {
-                ;(e.currentTarget as HTMLImageElement).style.display = "none"
-              }}
-            />
+            {failedImgs.has(i) ? (
+              <div className="w-full h-full flex items-center justify-center text-4xl">
+                💄
+              </div>
+            ) : (
+              <Image
+                src={src}
+                alt={product.name}
+                fill
+                className="object-cover"
+                loading={i === 0 ? "eager" : "lazy"}
+                sizes="(max-width: 640px) 50vw, 215px"
+                onError={() => markFailed(i)}
+              />
+            )}
           </div>
         ))}
       </div>
@@ -73,9 +82,7 @@ export function ProductGallery({ product }: ProductGalleryProps) {
                 key={i}
                 onClick={() => goTo(i)}
                 className={`h-[6px] rounded-full transition-all ${
-                  i === idx
-                    ? "w-4 bg-white"
-                    : "w-[6px] bg-white/50"
+                  i === idx ? "w-4 bg-white" : "w-[6px] bg-white/50"
                 }`}
                 aria-label={`Imagen ${i + 1}`}
               />
