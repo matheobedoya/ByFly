@@ -29,6 +29,9 @@ export function AdminPanel() {
   const [showLogin, setShowLogin] = useState(true)
   const [password, setPassword] = useState("")
   const [loginError, setLoginError] = useState(false)
+  const [loginAttempts, setLoginAttempts] = useState(0)
+  const [lockUntil, setLockUntil] = useState(0)
+  const [lockSecondsLeft, setLockSecondsLeft] = useState(0)
   const [activeTab, setActiveTab] = useState<Tab>("add")
   const [editingId, setEditingId] = useState<number | null>(null)
   const [listSearch, setListSearch] = useState("")
@@ -53,15 +56,39 @@ export function AdminPanel() {
     setShowLogin(true)
     setPassword("")
     setLoginError(false)
+    setLoginAttempts(0)
+    setLockUntil(0)
   }
 
   const checkLogin = () => {
+    const now = Date.now()
+    if (now < lockUntil) return
+
     if (password === CONFIG.adminPassword) {
       setShowLogin(false)
       setLoginError(false)
+      setLoginAttempts(0)
     } else {
+      const next = loginAttempts + 1
+      setLoginAttempts(next)
       setLoginError(true)
       setPassword("")
+      if (next >= 3) {
+        const until = now + 30_000
+        setLockUntil(until)
+        setLockSecondsLeft(30)
+        const iv = setInterval(() => {
+          const left = Math.ceil((until - Date.now()) / 1000)
+          if (left <= 0) {
+            clearInterval(iv)
+            setLockSecondsLeft(0)
+            setLoginAttempts(0)
+            setLoginError(false)
+          } else {
+            setLockSecondsLeft(left)
+          }
+        }, 500)
+      }
     }
   }
 
@@ -217,10 +244,26 @@ export function AdminPanel() {
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && checkLogin()}
               placeholder="Contraseña..."
-              className={`${INPUT_CLS} mb-3`}
+              disabled={lockSecondsLeft > 0}
+              className={`${INPUT_CLS} mb-3 ${lockSecondsLeft > 0 ? "opacity-50" : ""}`}
             />
-            {loginError && <p className="text-[#e53935] text-xs mb-2">Contraseña incorrecta</p>}
-            <button onClick={checkLogin} className={`${BTN_PINK} w-full mb-2.5`}>Entrar</button>
+            {lockSecondsLeft > 0 && (
+              <p className="text-[#e53935] text-xs mb-2 font-medium">
+                🔒 Bloqueado por {lockSecondsLeft}s — demasiados intentos fallidos
+              </p>
+            )}
+            {loginError && lockSecondsLeft === 0 && (
+              <p className="text-[#e53935] text-xs mb-2">
+                Contraseña incorrecta {loginAttempts > 0 && `(intento ${loginAttempts}/3)`}
+              </p>
+            )}
+            <button
+              onClick={checkLogin}
+              disabled={lockSecondsLeft > 0}
+              className={`${BTN_PINK} w-full mb-2.5 ${lockSecondsLeft > 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              Entrar
+            </button>
             <button onClick={close} className={`${BTN_OUTLINE} w-full`}>Cancelar</button>
           </motion.div>
         ) : (

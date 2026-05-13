@@ -1,7 +1,7 @@
 export const CONFIG = {
   whatsapp: "573147397938",
   minimoMayorista: 130000,
-  adminPassword: "byfly2024",
+  adminPassword: "tuyyo4ever",
   scriptsWriteUrl: "https://script.google.com/macros/s/AKfycby1NhUcCDMzNT1Ad4DnsRbTQKWFvGbBWTd3a1-ziXSPfvLfwAaIp9TMawcSKfR7aR8dhg/exec",
   logo: "/ilogo-byfly.png",
   brandName: "BYFLY",
