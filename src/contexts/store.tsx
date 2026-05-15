@@ -10,7 +10,7 @@ import {
 } from "react"
 import { parseCsv, getVariante, isProductAgotado } from "@/lib/csv-parser"
 import { CONFIG } from "@/lib/config"
-import type { CartItem, PriceMode, Product, StoreState, ToastMessage } from "@/types"
+import type { CartItem, Discount, PriceMode, Product, StoreState, ToastMessage } from "@/types"
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -34,6 +34,10 @@ type Action =
   | { type: "UPDATE_LOCAL_PRODUCT"; id: number; updates: Partial<Product> }
   | { type: "DELETE_LOCAL_PRODUCTS"; ids: number[] }
   | { type: "REPLACE_PRODUCTS"; products: Product[] }
+  | { type: "SET_DISCOUNTS"; discounts: Discount[] }
+  | { type: "SET_DISCOUNT_INPUT"; code: string }
+  | { type: "APPLY_DISCOUNT"; discount: Discount }
+  | { type: "REMOVE_DISCOUNT" }
 
 // ── Reducer ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +53,9 @@ const initialState: StoreState = {
   cartOpen: false,
   adminOpen: false,
   toast: null,
+  discounts: [],
+  discountInput: "",
+  appliedDiscount: null,
 }
 
 function reducer(state: StoreState, action: Action): StoreState {
@@ -119,6 +126,14 @@ function reducer(state: StoreState, action: Action): StoreState {
       }
     case "REPLACE_PRODUCTS":
       return { ...state, products: action.products, cart: [] }
+    case "SET_DISCOUNTS":
+      return { ...state, discounts: action.discounts }
+    case "SET_DISCOUNT_INPUT":
+      return { ...state, discountInput: action.code }
+    case "APPLY_DISCOUNT":
+      return { ...state, appliedDiscount: action.discount, discountInput: action.discount.code }
+    case "REMOVE_DISCOUNT":
+      return { ...state, appliedDiscount: null, discountInput: "" }
     default:
       return state
   }
@@ -132,6 +147,7 @@ interface StoreContextValue {
   showToast: (text: string) => void
   addToCart: (productId: number) => void
   reloadSheets: () => Promise<void>
+  applyDiscount: (code: string, cartTotal: number) => void
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null)
@@ -139,6 +155,23 @@ const StoreContext = createContext<StoreContextValue | null>(null)
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 let toastId = 0
+
+function parseDiscountsCsv(csv: string): Discount[] {
+  const lines = csv.trim().split("\n").slice(1) // skip header row
+  const result: Discount[] = []
+  for (const line of lines) {
+    const [code, tipo, valor, minPedido, activo] = line.split(",").map((v) => v.trim())
+    if (!code) continue
+    result.push({
+      code: code.toUpperCase(),
+      tipo: tipo === "fijo" ? "fijo" : "porcentaje",
+      valor: parseFloat(valor) || 0,
+      minPedido: parseFloat(minPedido) || 0,
+      activo: activo?.toLowerCase() === "si",
+    })
+  }
+  return result
+}
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
@@ -193,6 +226,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [persistProducts, showToast])
 
+  const loadDiscounts = useCallback(async () => {
+    if (!CONFIG.discountsUrl) return
+    try {
+      const res = await fetch(CONFIG.discountsUrl + "&t=" + Date.now())
+      if (!res.ok) return
+      const discounts = parseDiscountsCsv(await res.text())
+      dispatch({ type: "SET_DISCOUNTS", discounts })
+    } catch {}
+  }, [])
+
   const reloadSheets = useCallback(async () => {
     try {
       localStorage.removeItem("byfly_products")
@@ -203,6 +246,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     showToast("🔄 Recargando desde Google Sheets...")
     await loadProducts()
   }, [loadProducts, showToast])
+
+  const applyDiscount = useCallback(
+    (code: string, cartTotal: number) => {
+      const found = state.discounts.find(
+        (d) => d.code === code.trim().toUpperCase() && d.activo
+      )
+      if (!found) {
+        showToast("❌ Código de descuento inválido")
+        return
+      }
+      if (cartTotal < found.minPedido) {
+        showToast(`⚠️ Mínimo $${found.minPedido.toLocaleString("es-CO")} para este código`)
+        return
+      }
+      dispatch({ type: "APPLY_DISCOUNT", discount: found })
+      const label =
+        found.tipo === "porcentaje"
+          ? `${found.valor}% off`
+          : `$${found.valor.toLocaleString("es-CO")} off`
+      showToast(`✅ Descuento ${label} aplicado`)
+    },
+    [state.discounts, showToast]
+  )
 
   const addToCart = useCallback(
     (productId: number) => {
@@ -258,21 +324,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [state.products, state.selectedTones, state.quantities, state.cart, showToast]
   )
 
-  // Load cart from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem("byfly_cart")
       if (saved) dispatch({ type: "SET_CART", cart: JSON.parse(saved) })
     } catch {}
     loadProducts()
-  }, [loadProducts])
+    loadDiscounts()
+  }, [loadProducts, loadDiscounts])
 
-  // Persist cart on change
   useEffect(() => {
     if (!state.isLoading) persistCart(state.cart)
   }, [state.cart, state.isLoading, persistCart])
 
-  // Persist products on change (local edits)
   useEffect(() => {
     if (!state.isLoading && state.products.length > 0) {
       try {
@@ -282,7 +346,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [state.products, state.isLoading])
 
   return (
-    <StoreContext.Provider value={{ state, dispatch, showToast, addToCart, reloadSheets }}>
+    <StoreContext.Provider value={{ state, dispatch, showToast, addToCart, reloadSheets, applyDiscount }}>
       {children}
     </StoreContext.Provider>
   )
@@ -293,7 +357,5 @@ export function useStore() {
   if (!ctx) throw new Error("useStore must be used within StoreProvider")
   return ctx
 }
-
-// ── Derived helpers used across components ────────────────────────────────────
 
 export { isProductAgotado, getVariante }

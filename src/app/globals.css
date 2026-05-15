@@ -12,7 +12,14 @@
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-cormorant);
 
-  /* BYFLY pink palette */
+  /* ─── BRAND PALETTE — cambiar por cliente ───────────────────────────────
+     primary      : color principal (botones, acentos)
+     primary-dark : degradado oscuro (header, FAB)
+     primary-deep : tono más profundo (hover, sombras)
+     primary-light: fondo claro (cards, hero)
+     primary-mid  : tono intermedio (bordes, separadores)
+     primary-soft : fondo general de la página
+     ─────────────────────────────────────────────────────────────────────── */
   --color-pink: #F06292;
   --color-pink-dark: #C2185B;
   --color-pink-deep: #880E4F;
@@ -130,6 +137,14 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@utility animate-ticker {
+  animation: ticker 28s linear infinite;
 }
 
 @keyframes cosmic-spin {

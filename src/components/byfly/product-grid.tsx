@@ -1,10 +1,19 @@
 "use client"
 
+import Image from "next/image"
 import { useMemo } from "react"
 import { useStore } from "@/contexts/store"
-import { CAT_ICONS } from "@/lib/config"
+import { CAT_ICONS, CATEGORIES, BADGE_LABELS } from "@/lib/config"
 import { ProductCard } from "./product-card"
 import { DistortedGlass } from "@/components/ui/distorted-glass"
+
+function isImageUrl(val: string): boolean {
+  return val.startsWith("/") || val.startsWith("http")
+}
+
+function getCatName(cat: string): string {
+  return CATEGORIES.find((c) => c.key === cat)?.name ?? cat
+}
 
 export function ProductGrid() {
   const { state, dispatch } = useStore()
@@ -12,12 +21,20 @@ export function ProductGrid() {
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
-      const mc = currentCat === "todos" || p.cat === currentCat
+      // Soporte para filtro por badge: key "badge:Nuevo", "badge:Viral TikTok", etc.
+      const mc =
+        currentCat === "todos"
+          ? true
+          : currentCat.startsWith("badge:")
+            ? p.badge === currentCat.slice(6)
+            : p.cat === currentCat
+
       const q = searchQuery.toLowerCase()
       const ms =
         !q ||
         p.name.toLowerCase().includes(q) ||
         (p.brand || "").toLowerCase().includes(q)
+
       return mc && ms
     })
   }, [products, currentCat, searchQuery])
@@ -62,29 +79,51 @@ export function ProductGrid() {
 
   return (
     <div className="max-w-[1280px] mx-auto px-5 pb-10">
-      {grouped.map(({ cat, items }, groupIdx) => (
-        <div key={cat}>
-          {/* Section title */}
-          <div className="font-serif text-[28px] font-bold text-pink-dark mt-9 mb-[18px] pb-2.5 border-b-2 border-pink-light flex items-center gap-2.5 italic">
-            <span>{CAT_ICONS[cat] || ""}</span>
-            {cat}
-          </div>
+      {grouped.map(({ cat, items }, groupIdx) => {
+        // Para filtros de badge, mostrar el label del badge en el título de sección
+        const isBadgeCat = cat.startsWith("badge:")
+        const badgeKey = isBadgeCat ? cat.slice(6) : ""
+        const sectionLabel = isBadgeCat
+          ? (BADGE_LABELS[badgeKey] ?? badgeKey)
+          : getCatName(cat)
 
-          {/* Product grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 mb-2">
-            {items.map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
-          </div>
+        const iconVal = CAT_ICONS[isBadgeCat ? badgeKey : cat] || ""
+        const showImg = iconVal && isImageUrl(iconVal)
 
-          {/* Distorted glass separator between sections (not after last) */}
-          {groupIdx < grouped.length - 1 && (
-            <div className="mt-4">
-              <DistortedGlass />
+        return (
+          <div key={cat}>
+            {/* Título de sección */}
+            <div className="font-serif text-[28px] font-bold text-pink-dark mt-9 mb-[18px] pb-2.5 border-b-2 border-pink-light flex items-center gap-2.5 italic">
+              {showImg ? (
+                <Image
+                  src={iconVal}
+                  alt={sectionLabel}
+                  width={32}
+                  height={32}
+                  className="rounded-lg object-cover flex-shrink-0"
+                  unoptimized
+                />
+              ) : (
+                iconVal && <span>{iconVal}</span>
+              )}
+              {sectionLabel}
             </div>
-          )}
-        </div>
-      ))}
+
+            {/* Grid de productos */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 mb-2">
+              {items.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+
+            {groupIdx < grouped.length - 1 && (
+              <div className="mt-4">
+                <DistortedGlass />
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -378,6 +378,7 @@ const DynamicIslandContent = ({
         width: dimensions.width,
         height: dimensions.height,
         borderRadius: currentSize.borderRadius,
+        opacity: state.size === SIZE_PRESETS.EMPTY ? 0 : 1,
         transition: {
           type: "spring",
           stiffness,

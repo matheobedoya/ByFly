@@ -8,28 +8,35 @@ import { CONFIG } from "@/lib/config"
 import { WholesaleBar } from "./wholesale-bar"
 
 export function CartDrawer() {
-  const { state, dispatch, showToast } = useStore()
-  const { cart, cartOpen, priceMode } = state
+  const { state, dispatch, showToast, applyDiscount } = useStore()
+  const { cart, cartOpen, priceMode, discountInput, appliedDiscount } = state
   const [clientName, setClientName] = useState("")
   const [clientCity, setClientCity] = useState("")
 
   const getP = (c: (typeof cart)[0]) =>
     (priceMode === "detal" ? c.detal : c.mayor) ?? c.detal ?? 0
-  const total = cart.reduce((s, c) => s + getP(c) * c.qty, 0)
+  const subtotal = cart.reduce((s, c) => s + getP(c) * c.qty, 0)
   const totalDetal = cart.reduce((s, c) => s + (c.detal ?? 0) * c.qty, 0)
   const totalMayor = cart.reduce((s, c) => s + ((c.mayor ?? c.detal) ?? 0) * c.qty, 0)
   const saving = priceMode === "mayor" ? totalDetal - totalMayor : 0
-  const cartCount = cart.reduce((s, c) => s + c.qty, 0)
+
+  const discountAmount = appliedDiscount
+    ? appliedDiscount.tipo === "porcentaje"
+      ? Math.round(subtotal * appliedDiscount.valor / 100)
+      : Math.min(appliedDiscount.valor, subtotal)
+    : 0
+  const total = subtotal - discountAmount
+
   const mayorWarning =
     priceMode === "mayor" &&
     cart.length > 0 &&
-    total < CONFIG.minimoMayorista
+    subtotal < CONFIG.minimoMayorista
 
   const sendToWhatsApp = () => {
     if (!cart.length) { showToast("⚠️ El carrito está vacío"); return }
     if (mayorWarning) return
     const mode = priceMode === "detal" ? "Detal" : "Mayorista"
-    let msg = `🌸 *Pedido BYFLY Makeup*\n`
+    let msg = `${CONFIG.brandEmoji} *Pedido ${CONFIG.brandName} ${CONFIG.brandSub}*\n`
     if (clientName) msg += `👤 *Nombre:* ${clientName}\n`
     if (clientCity) msg += `📍 *Ciudad:* ${clientCity}\n`
     msg += `💰 *Precio:* ${mode}\n\n`
@@ -37,7 +44,15 @@ export function CartDrawer() {
       const p = getP(c)
       msg += `- ${c.qty}x ${c.name}${c.brand ? ` (${c.brand})` : ""}${c.tono ? ` — Tono: *${c.tono}*` : ""} — $${(p * c.qty).toLocaleString("es-CO")}\n`
     })
-    msg += `\n💰 *Total: $${total.toLocaleString("es-CO")}*`
+    msg += `\n💰 *Subtotal: $${subtotal.toLocaleString("es-CO")}*`
+    if (discountAmount > 0 && appliedDiscount) {
+      const label =
+        appliedDiscount.tipo === "porcentaje"
+          ? `${appliedDiscount.valor}% off`
+          : `$${appliedDiscount.valor.toLocaleString("es-CO")} off`
+      msg += `\n🎟️ *Descuento (${appliedDiscount.code} — ${label}): -$${discountAmount.toLocaleString("es-CO")}*`
+    }
+    msg += `\n💵 *Total: $${total.toLocaleString("es-CO")}*`
     if (saving > 0) msg += `\n🟢 *Ahorro vs detal: $${saving.toLocaleString("es-CO")}*`
     if (priceMode === "mayor") msg += `\n\n⚠️ _Pedido mayorista — mínimo $${CONFIG.minimoMayorista.toLocaleString("es-CO")}_`
     msg += `\n\n¡Hola! Me gustaría realizar este pedido 😊`
@@ -74,9 +89,7 @@ export function CartDrawer() {
             {/* Header */}
             <div
               className="px-[22px] py-[18px] flex items-center justify-between flex-shrink-0"
-              style={{
-                background: "linear-gradient(135deg,#880E4F,#C2185B)",
-              }}
+              style={{ background: "linear-gradient(135deg,#880E4F,#C2185B)" }}
             >
               <h2 className="font-serif text-[22px] font-bold text-white">
                 🛒 Mi Carrito
@@ -141,7 +154,6 @@ export function CartDrawer() {
                         <div className="text-[13px] text-pink-dark font-semibold mt-[2px]">
                           ${(p * item.qty).toLocaleString("es-CO")}
                         </div>
-                        {/* Qty controls */}
                         <div className="flex items-center gap-[7px] mt-1.5">
                           <button
                             onClick={() => {
@@ -187,8 +199,46 @@ export function CartDrawer() {
               <div className="px-[18px] pt-2 pb-1 bg-pink-soft border-t border-[#f0d0dc] flex-shrink-0">
                 <div className="flex justify-between text-[13px] text-[#555] mb-1">
                   <span>Subtotal</span>
-                  <span>${total.toLocaleString("es-CO")}</span>
+                  <span>${subtotal.toLocaleString("es-CO")}</span>
                 </div>
+
+                {/* Código de descuento */}
+                {CONFIG.discountsUrl ? (
+                  appliedDiscount ? (
+                    <div className="flex items-center justify-between text-[12px] text-[#2e7d32] font-semibold mb-1 bg-[#e8f5e9] px-2.5 py-1.5 rounded-[8px] border border-[#a5d6a7]">
+                      <span>🎟️ {appliedDiscount.code} — {appliedDiscount.tipo === "porcentaje" ? `${appliedDiscount.valor}%` : `$${appliedDiscount.valor.toLocaleString("es-CO")}`} off</span>
+                      <span className="flex items-center gap-2">
+                        <span>-${discountAmount.toLocaleString("es-CO")}</span>
+                        <button
+                          onClick={() => dispatch({ type: "REMOVE_DISCOUNT" })}
+                          className="text-[#9e9e9e] hover:text-pink-dark cursor-pointer"
+                          title="Quitar descuento"
+                        >✕</button>
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1.5 mb-1.5">
+                      <input
+                        type="text"
+                        value={discountInput}
+                        onChange={(e) => dispatch({ type: "SET_DISCOUNT_INPUT", code: e.target.value.toUpperCase() })}
+                        placeholder="Código de descuento"
+                        maxLength={30}
+                        className="flex-1 px-3 py-1.5 border-[1.5px] border-[#f0d0dc] rounded-[8px] font-sans text-[12px] text-[#1a1a2e] outline-none transition-all focus:border-pink uppercase"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") applyDiscount(discountInput, subtotal)
+                        }}
+                      />
+                      <button
+                        onClick={() => applyDiscount(discountInput, subtotal)}
+                        className="px-3 py-1.5 bg-pink text-white rounded-[8px] text-[12px] font-semibold cursor-pointer hover:bg-pink-dark transition-all whitespace-nowrap"
+                      >
+                        Aplicar
+                      </button>
+                    </div>
+                  )
+                ) : null}
+
                 {saving > 0 && (
                   <div className="text-[12px] text-[#2e7d32] font-semibold text-right mb-1">
                     🟢 Ahorraste ${saving.toLocaleString("es-CO")} vs precio detal
@@ -234,7 +284,7 @@ export function CartDrawer() {
               </div>
               {mayorWarning && (
                 <div className="px-[14px] py-2.5 bg-[#fff3e0] border-[1.5px] border-[#ffb74d] rounded-[12px] text-[13px] text-[#e65100] mb-2.5 text-center font-medium">
-                  ⚠️ Te faltan ${(CONFIG.minimoMayorista - total).toLocaleString("es-CO")} para el mínimo mayorista
+                  ⚠️ Te faltan ${(CONFIG.minimoMayorista - subtotal).toLocaleString("es-CO")} para el mínimo mayorista
                 </div>
               )}
               <button

@@ -39,6 +39,14 @@ export interface ToastMessage {
   text: string
 }
 
+export interface Discount {
+  code: string
+  tipo: "porcentaje" | "fijo"
+  valor: number
+  minPedido: number
+  activo: boolean
+}
+
 export interface StoreState {
   products: Product[]
   isLoading: boolean
@@ -51,4 +59,7 @@ export interface StoreState {
   cartOpen: boolean
   adminOpen: boolean
   toast: ToastMessage | null
+  discounts: Discount[]
+  discountInput: string
+  appliedDiscount: Discount | null
 }
