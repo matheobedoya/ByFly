@@ -1,13 +1,12 @@
 "use client"
 
 import Image from "next/image"
+import Link from "next/link"
 import { useStore } from "@/contexts/store"
 import { CONFIG } from "@/lib/config"
 
 export function Header() {
-  const { state, dispatch } = useStore()
-  const { priceMode, cart, cartOpen } = state
-  const cartCount = cart.reduce((s, c) => s + c.qty, 0)
+  const { dispatch } = useStore()
 
   return (
     <header
@@ -40,48 +39,16 @@ export function Header() {
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {CONFIG.siteMode === "catalog" && (
-            <>
-              {/* Price toggle */}
-              <div
-                className="flex rounded-[30px] p-[3px] border border-white/25"
-                style={{ background: "rgba(255,255,255,0.12)" }}
-              >
-                {(["detal", "mayor"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => dispatch({ type: "SET_PRICE_MODE", mode })}
-                    className={`px-[15px] py-[6px] rounded-[25px] border-none cursor-pointer font-sans text-xs font-medium transition-all ${
-                      priceMode === mode
-                        ? "bg-white text-pink-dark font-semibold"
-                        : "bg-transparent text-white/75"
-                    }`}
-                  >
-                    {mode === "detal" ? "Detal" : "Mayorista"}
-                  </button>
-                ))}
-              </div>
-
-              {/* Cart button */}
-              <button
-                onClick={() => dispatch({ type: "SET_CART_OPEN", open: !cartOpen })}
-                className="flex items-center gap-2 rounded-[30px] px-[18px] py-2 border border-white/35 text-white cursor-pointer text-sm font-medium transition-all hover:bg-white/25"
-                style={{ background: "rgba(255,255,255,0.15)" }}
-              >
-                <span>🛒</span>
-                <span>Carrito</span>
-                <span
-                  className={`bg-white text-pink-dark rounded-full w-5 h-5 flex items-center justify-center text-[11px] font-bold min-w-[20px] transition-transform ${
-                    cartCount > 0 ? "scale-100" : ""
-                  }`}
-                >
-                  {cartCount}
-                </span>
-              </button>
-            </>
-          )}
-
+        <div className="flex items-center gap-4">
+          {/* Links subpáginas */}
+          <div className="hidden sm:flex items-center gap-4 text-[12px] text-white/80">
+            <Link href="/como-hacer-pedido" className="hover:text-white transition-colors">
+              ¿Cómo hacer mi pedido?
+            </Link>
+            <Link href="/politicas" className="hover:text-white transition-colors">
+              Políticas y envíos
+            </Link>
+          </div>
           {/* Services/restaurant: WhatsApp contact button */}
           {CONFIG.siteMode !== "catalog" && (
             <a

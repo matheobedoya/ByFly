@@ -12,7 +12,7 @@ function BannerCarousel() {
 
   useEffect(() => {
     if (banners.length < 2) return
-    const t = setInterval(() => setIdx((i) => (i + 1) % banners.length), 5000)
+    const t = setInterval(() => setIdx((i) => (i + 1) % banners.length), 8000)
     return () => clearInterval(t)
   }, [banners.length])
 
@@ -106,6 +106,8 @@ function BannerCarousel() {
 
 export function HeroSection() {
   const { state, dispatch } = useStore()
+  const { priceMode, cart, cartOpen } = state
+  const cartCount = cart.reduce((s, c) => s + c.qty, 0)
 
   return (
     <section className="bg-gradient-to-br from-pink-light via-[#f8bbd0] to-pink-light border-b border-[#f0d0dc]">
@@ -138,7 +140,7 @@ export function HeroSection() {
             {CONFIG.heroSubtitle}
           </p>
 
-          {/* Buscador (movido desde FilterBar) */}
+          {/* Buscador */}
           <div className="relative max-w-md mx-auto lg:mx-0 w-full">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-pink text-sm pointer-events-none">
               🔍
@@ -155,6 +157,46 @@ export function HeroSection() {
 
         {/* Banner carousel grande */}
         <BannerCarousel />
+
+        {/* Barra de acciones: Detal/Mayorista + Carrito + links subpáginas */}
+        {CONFIG.siteMode === "catalog" && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            {/* Izquierda: toggle precio + carrito */}
+            <div className="flex items-center gap-2">
+              <div
+                className="flex rounded-[30px] p-[3px] border border-pink/25"
+                style={{ background: "rgba(255,255,255,0.55)" }}
+              >
+                {(["detal", "mayor"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => dispatch({ type: "SET_PRICE_MODE", mode })}
+                    className={`px-4 py-[6px] rounded-[25px] text-xs font-medium cursor-pointer transition-all ${
+                      priceMode === mode
+                        ? "bg-pink text-white font-semibold shadow-sm"
+                        : "bg-transparent text-pink-dark/70 hover:text-pink-dark"
+                    }`}
+                  >
+                    {mode === "detal" ? "Detal" : "Mayorista"}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => dispatch({ type: "SET_CART_OPEN", open: !cartOpen })}
+                className="flex items-center gap-1.5 rounded-[30px] px-4 py-[7px] border border-pink/25 text-pink-dark text-xs font-medium cursor-pointer transition-all hover:bg-white/70"
+                style={{ background: "rgba(255,255,255,0.55)" }}
+              >
+                🛒
+                <span>Carrito</span>
+                <span className="bg-pink text-white rounded-full w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold">
+                  {cartCount}
+                </span>
+              </button>
+            </div>
+
+          </div>
+        )}
       </div>
     </section>
   )
