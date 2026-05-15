@@ -6,7 +6,9 @@ import { useStore } from "@/contexts/store"
 import { CONFIG } from "@/lib/config"
 
 export function Header() {
-  const { dispatch } = useStore()
+  const { state, dispatch } = useStore()
+  const { cart, cartOpen } = state
+  const cartCount = cart.reduce((s, c) => s + c.qty, 0)
 
   return (
     <header
@@ -63,6 +65,21 @@ export function Header() {
               </svg>
               {CONFIG.siteMode === "restaurant" ? "Ordenar" : "Contactar"}
             </a>
+          )}
+
+          {/* Carrito */}
+          {CONFIG.siteMode === "catalog" && (
+            <button
+              onClick={() => dispatch({ type: "SET_CART_OPEN", open: !cartOpen })}
+              className="flex items-center gap-1.5 rounded-[30px] px-4 py-2 border border-white/35 text-white text-sm font-medium cursor-pointer hover:bg-white/25 transition-all"
+              style={{ background: "rgba(255,255,255,0.15)" }}
+            >
+              🛒
+              <span className="hidden sm:inline">Carrito</span>
+              <span className="bg-white text-pink-dark rounded-full w-5 h-5 flex items-center justify-center text-[11px] font-bold min-w-[20px]">
+                {cartCount}
+              </span>
+            </button>
           )}
 
           {/* Admin */}

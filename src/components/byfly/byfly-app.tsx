@@ -5,7 +5,7 @@ import { StoreProvider } from "@/contexts/store"
 import { CONFIG } from "@/lib/config"
 import { Header } from "./header"
 import { FilterBar } from "./filter-bar"
-import { HeroSection } from "./hero-section"
+import { HeroSection, BannerCarousel } from "./hero-section"
 import { ProductGrid } from "./product-grid"
 import { CartDrawer } from "./cart-drawer"
 import { AdminPanel } from "./admin-panel"
@@ -21,6 +21,7 @@ export function ByflyApp() {
       <AnnouncementBar />
       <Header />
       <FilterBar />
+      <BannerCarousel />
       <HeroSection />
       {CONFIG.aboutText && <AboutSection />}
       <ProductGrid />
