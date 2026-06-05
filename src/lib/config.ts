@@ -31,7 +31,7 @@ export const CONFIG = {
   heroBanners: [
     {
       id: 1,
-      img: "/banner-equipo.jpeg",
+      img: "",
       title: "🎁 Combos Especiales",
       subtitle: "Arma tu kit de maquillaje ideal al mejor precio",
       cta: "Ver combos",

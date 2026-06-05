@@ -10,17 +10,18 @@ import { useStore } from "@/contexts/store"
 
 export function BannerCarousel() {
   const [idx, setIdx] = useState(0)
-  const [banners, setBanners] = useState<Banner[]>(CONFIG.heroBanners as Banner[])
+  const [banners, setBanners] = useState<Banner[]>([])
 
   useEffect(() => {
-    if (!CONFIG.bannersUrl) return
+    const fallback = CONFIG.heroBanners as Banner[]
+    if (!CONFIG.bannersUrl) { setBanners(fallback); return }
     fetch(CONFIG.bannersUrl)
       .then((r) => r.text())
       .then((csv) => {
         const parsed = parseBannersCsv(csv)
-        if (parsed.length) setBanners(parsed)
+        setBanners(parsed.length ? parsed : fallback)
       })
-      .catch(() => {/* usa CONFIG.heroBanners como fallback */})
+      .catch(() => setBanners(fallback))
   }, [])
 
   useEffect(() => {
@@ -30,6 +31,10 @@ export function BannerCarousel() {
   }, [banners.length])
 
   const goTo = (i: number) => setIdx((i + banners.length) % banners.length)
+
+  if (!banners.length) return (
+    <div className="relative w-full bg-gradient-to-r from-pink-100 to-pink-200" style={{ height: "clamp(200px, 32vw, 480px)" }} />
+  )
 
   return (
     <div
