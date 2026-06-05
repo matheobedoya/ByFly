@@ -14,7 +14,7 @@ export const CONFIG = {
   // — Marca —
   logo: "/ilogo-byfly.png",
   brandName: "BYFLY",
-  brandSub: "makeup",
+  brandSub: "Makeup",
   brandEmoji: "🌸",
 
   // — Hero —
