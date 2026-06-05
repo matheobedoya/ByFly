@@ -95,6 +95,7 @@ export function CartDrawer() {
                 🛒 Mi Carrito
               </h2>
               <button
+                aria-label="Cerrar carrito"
                 onClick={() => dispatch({ type: "SET_CART_OPEN", open: false })}
                 className="bg-white/15 border-none text-white w-8 h-8 rounded-full cursor-pointer text-lg flex items-center justify-center hover:bg-white/30 transition-all"
               >
@@ -156,6 +157,7 @@ export function CartDrawer() {
                         </div>
                         <div className="flex items-center gap-[7px] mt-1.5">
                           <button
+                            aria-label="Reducir cantidad"
                             onClick={() => {
                               if (item.qty <= 1) {
                                 dispatch({ type: "REMOVE_FROM_CART", cartKey: item.cartKey })
@@ -169,6 +171,7 @@ export function CartDrawer() {
                           </button>
                           <span className="text-xs font-semibold min-w-[18px] text-center">{item.qty}</span>
                           <button
+                            aria-label="Aumentar cantidad"
                             onClick={() => {
                               if (item.stock !== null && item.qty >= item.stock) {
                                 showToast(`⚠️ Solo hay ${item.stock} unidades`)
@@ -183,6 +186,7 @@ export function CartDrawer() {
                         </div>
                       </div>
                       <button
+                        aria-label="Eliminar producto"
                         onClick={() => dispatch({ type: "REMOVE_FROM_CART", cartKey: item.cartKey })}
                         className="text-[#f0d0dc] cursor-pointer text-lg p-1 transition-all hover:text-pink-dark flex-shrink-0"
                       >
@@ -224,6 +228,7 @@ export function CartDrawer() {
                         onChange={(e) => dispatch({ type: "SET_DISCOUNT_INPUT", code: e.target.value.toUpperCase() })}
                         placeholder="Código de descuento"
                         maxLength={30}
+                        autoComplete="off"
                         className="flex-1 px-3 py-1.5 border-[1.5px] border-[#f0d0dc] rounded-[8px] font-sans text-[12px] text-[#1a1a2e] outline-none transition-all focus:border-pink uppercase"
                         onKeyDown={(e) => {
                           if (e.key === "Enter") applyDiscount(discountInput, subtotal)
@@ -266,6 +271,7 @@ export function CartDrawer() {
                   onChange={(e) => setClientName(e.target.value)}
                   placeholder="Ej: María García"
                   maxLength={60}
+                  autoComplete="name"
                   className="w-full px-[13px] py-2 border-[1.5px] border-[#f0d0dc] rounded-[10px] font-sans text-[13px] text-[#1a1a2e] outline-none transition-all focus:border-pink focus:shadow-[0_0_0_3px_rgba(240,98,146,0.08)]"
                 />
               </div>
@@ -279,6 +285,7 @@ export function CartDrawer() {
                   onChange={(e) => setClientCity(e.target.value)}
                   placeholder="Ej: Medellín"
                   maxLength={60}
+                  autoComplete="address-level2"
                   className="w-full px-[13px] py-2 border-[1.5px] border-[#f0d0dc] rounded-[10px] font-sans text-[13px] text-[#1a1a2e] outline-none transition-all focus:border-pink focus:shadow-[0_0_0_3px_rgba(240,98,146,0.08)]"
                 />
               </div>

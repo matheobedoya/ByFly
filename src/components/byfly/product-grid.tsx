@@ -93,7 +93,7 @@ export function ProductGrid() {
         return (
           <div key={cat}>
             {/* Título de sección */}
-            <div className="font-serif text-[28px] font-bold text-pink-dark mt-9 mb-[18px] pb-2.5 border-b-2 border-pink-light flex items-center gap-2.5 italic">
+            <h2 className="font-serif text-[28px] font-bold text-pink-dark mt-9 mb-[18px] pb-2.5 border-b-2 border-pink-light flex items-center gap-2.5 italic">
               {showImg ? (
                 <Image
                   src={iconVal}
@@ -107,7 +107,7 @@ export function ProductGrid() {
                 iconVal && <span>{iconVal}</span>
               )}
               {sectionLabel}
-            </div>
+            </h2>
 
             {/* Grid de productos */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 mb-2">

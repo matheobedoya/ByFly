@@ -70,6 +70,7 @@ export function Header() {
           {/* Carrito */}
           {CONFIG.siteMode === "catalog" && (
             <button
+              aria-label="Carrito"
               onClick={() => dispatch({ type: "SET_CART_OPEN", open: !cartOpen })}
               className="flex items-center gap-1.5 rounded-[30px] px-4 py-2 border border-white/35 text-white text-sm font-medium cursor-pointer hover:bg-white/25 transition-all"
               style={{ background: "rgba(255,255,255,0.15)" }}
@@ -84,6 +85,7 @@ export function Header() {
 
           {/* Admin */}
           <button
+            aria-label="Panel de administración"
             onClick={() => dispatch({ type: "SET_ADMIN_OPEN", open: true })}
             className="text-white/65 border border-white/20 rounded-lg px-[13px] py-2 text-sm cursor-pointer transition-all hover:bg-white/20 hover:text-white"
             style={{ background: "rgba(255,255,255,0.1)" }}

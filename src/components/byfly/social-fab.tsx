@@ -62,7 +62,7 @@ export function SocialFab() {
       <motion.button
         onClick={() => setOpen((o) => !o)}
         whileTap={{ scale: 0.92 }}
-        className="w-14 h-14 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(136,14,79,0.4)] cursor-pointer border-none outline-none"
+        className="w-14 h-14 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(136,14,79,0.4)] cursor-pointer border-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-pink-dark"
         style={{ background: "linear-gradient(135deg,#880E4F,#C2185B,#F06292)" }}
         aria-label="Contacto"
       >

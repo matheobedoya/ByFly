@@ -26,6 +26,7 @@ export function BannerCarousel() {
 
   useEffect(() => {
     if (banners.length < 2) return
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
     const t = setInterval(() => setIdx((i) => (i + 1) % banners.length), 8000)
     return () => clearInterval(t)
   }, [banners.length])
@@ -104,6 +105,7 @@ export function BannerCarousel() {
             <button
               key={i}
               onClick={() => setIdx(i)}
+              aria-label={`Banner ${i + 1}`}
               className="h-1.5 rounded-full transition-all duration-300 bg-white cursor-pointer"
               style={{ width: i === idx ? "1.5rem" : "0.375rem", opacity: i === idx ? 1 : 0.5 }}
             />
@@ -126,9 +128,6 @@ export function HeroSection() {
       <div className="max-w-[1280px] mx-auto px-5 py-5 lg:py-7">
         {/* Título */}
         <div className="mb-4">
-          <div className="text-[10px] tracking-[5px] text-pink uppercase font-light mb-1">
-            {CONFIG.brandSub}
-          </div>
           <h1 className="font-serif text-[1.6rem] md:text-[2rem] xl:text-[2.4rem] font-bold italic text-pink-dark leading-tight mb-1.5">
             {CONFIG.heroTitle.replace("✨ ", "")}
           </h1>
@@ -149,6 +148,7 @@ export function HeroSection() {
                 value={searchQuery}
                 onChange={(e) => dispatch({ type: "SET_SEARCH", query: e.target.value })}
                 placeholder="Buscar producto, marca..."
+                autoComplete="off"
                 className="w-full pl-10 pr-4 py-2.5 border-[1.5px] border-pink-dark/20 rounded-[30px] font-sans text-sm outline-none bg-white/70 text-[#1a1a2e] transition-all focus:border-pink focus:bg-white focus:shadow-[0_0_0_3px_rgba(240,98,146,0.12)] placeholder:text-pink-dark/40"
               />
             </div>

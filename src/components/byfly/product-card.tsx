@@ -112,9 +112,9 @@ export function ProductCard({ product: p }: ProductCardProps) {
             {p.brand}
           </div>
         )}
-        <div className="text-sm font-medium text-[#1a1a2e] leading-[1.35] mb-2.5 flex-1">
+        <h3 className="text-sm font-medium text-[#1a1a2e] leading-[1.35] mb-2.5 flex-1">
           {p.name}
-        </div>
+        </h3>
 
         {/* Price row */}
         <div className="flex justify-between items-end mb-2.5">
@@ -217,6 +217,7 @@ export function ProductCard({ product: p }: ProductCardProps) {
             {/* Qty control */}
             <div className="flex items-center border-[1.5px] border-[#f0d0dc] rounded-[25px] overflow-hidden flex-shrink-0">
               <button
+                aria-label="Reducir cantidad"
                 disabled={agotado}
                 onClick={() => dispatch({ type: "SET_QUANTITY", id: p.id, qty: Math.max(1, qty - 1) })}
                 className="w-7 h-7 flex items-center justify-center text-pink text-base border-none bg-transparent cursor-pointer hover:bg-pink-light transition-colors disabled:opacity-40"
@@ -227,6 +228,7 @@ export function ProductCard({ product: p }: ProductCardProps) {
                 {qty}
               </span>
               <button
+                aria-label="Aumentar cantidad"
                 disabled={agotado}
                 onClick={() => dispatch({ type: "SET_QUANTITY", id: p.id, qty: qty + 1 })}
                 className="w-7 h-7 flex items-center justify-center text-pink text-base border-none bg-transparent cursor-pointer hover:bg-pink-light transition-colors disabled:opacity-40"
