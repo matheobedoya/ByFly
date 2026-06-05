@@ -1,16 +1,13 @@
 import type { Product, Variant, Banner } from "@/types"
 
-export function fixDriveUrl(url: string): string {
+export function fixDriveUrl(url: string, sz = "w600"): string {
   if (!url) return ""
-  if (
-    url.includes("thumbnail?id=") ||
-    url.includes("lh3.googleusercontent.com")
-  )
+  if (url.includes("thumbnail?id=") || url.includes("lh3.googleusercontent.com"))
     return url
   const m1 = url.match(/\/d\/([a-zA-Z0-9_-]{15,})/)
-  if (m1) return `https://drive.google.com/thumbnail?id=${m1[1]}&sz=w600`
+  if (m1) return `https://drive.google.com/thumbnail?id=${m1[1]}&sz=${sz}`
   const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]{15,})/)
-  if (m2) return `https://drive.google.com/thumbnail?id=${m2[1]}&sz=w600`
+  if (m2) return `https://drive.google.com/thumbnail?id=${m2[1]}&sz=${sz}`
   return url
 }
 
@@ -121,7 +118,7 @@ export function parseBannersCsv(text: string): Banner[] {
     const rawImg = g(0)
     banners.push({
       id: i + 1,
-      img: rawImg ? fixDriveUrl(rawImg) : "",
+      img: rawImg ? fixDriveUrl(rawImg, "w1600") : "",
       title: g(1),
       subtitle: g(2),
       cta: g(3) || "Ver más",
