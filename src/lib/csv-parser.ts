@@ -1,4 +1,4 @@
-import type { Product, Variant } from "@/types"
+import type { Product, Variant, Banner } from "@/types"
 
 export function fixDriveUrl(url: string): string {
   if (!url) return ""
@@ -99,6 +99,37 @@ export function parseCsv(text: string): Product[] {
   })
 
   return Array.from(mapa.values())
+}
+
+const BG_DEFAULTS = [
+  "linear-gradient(135deg, #880E4F 0%, #C2185B 55%, #F06292 100%)",
+  "linear-gradient(135deg, #4A148C 0%, #7B1FA2 55%, #CE93D8 100%)",
+  "linear-gradient(135deg, #B71C1C 0%, #E53935 55%, #EF9A9A 100%)",
+]
+
+// Columns: 0:imagen_url 1:titulo 2:subtitulo 3:cta 4:activo
+export function parseBannersCsv(text: string): Banner[] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim())
+  if (!lines.length) return []
+  const hasHeader = lines[0].toLowerCase().includes("titulo") || lines[0].toLowerCase().includes("imagen")
+  const data = hasHeader ? lines.slice(1) : lines
+  const banners: Banner[] = []
+  data.forEach((line, i) => {
+    const cols = parseLine(line)
+    const g = (idx: number) => (cols[idx] || "").trim().replace(/^"|"$/g, "")
+    if (g(4).toLowerCase() === "no") return
+    const rawImg = g(0)
+    banners.push({
+      id: i + 1,
+      img: rawImg ? fixDriveUrl(rawImg) : "",
+      title: g(1),
+      subtitle: g(2),
+      cta: g(3) || "Ver más",
+      ctaLink: "#",
+      bg: BG_DEFAULTS[i % BG_DEFAULTS.length],
+    })
+  })
+  return banners
 }
 
 export function getVariante(

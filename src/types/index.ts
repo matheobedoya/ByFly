@@ -32,6 +32,16 @@ export interface CartItem {
   stock: number | null
 }
 
+export interface Banner {
+  id: number
+  img: string
+  title: string
+  subtitle: string
+  cta: string
+  ctaLink: string
+  bg: string
+}
+
 export type PriceMode = "detal" | "mayor"
 
 export interface ToastMessage {

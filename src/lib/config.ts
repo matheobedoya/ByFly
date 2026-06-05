@@ -31,7 +31,7 @@ export const CONFIG = {
   heroBanners: [
     {
       id: 1,
-      img: "",
+      img: "/banner-equipo.jpeg",
       title: "🎁 Combos Especiales",
       subtitle: "Arma tu kit de maquillaje ideal al mejor precio",
       cta: "Ver combos",
@@ -73,6 +73,9 @@ export const CONFIG = {
   aboutTitle: "",
   aboutText: "",
 
+  // — Banners desde Sheets (pestaña "Banners", gid=11883183) —
+  bannersUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQo4RhtucI4m_U32VCNzNy2E33wCeXeO2NKTcDOFn1mDupdXtPsqDEPF6NFJDYRc6LNWJJpRAZLguIt/pub?gid=11883183&single=true&output=csv",
+
   // — Datos productos —
   sheetsUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQo4RhtucI4m_U32VCNzNy2E33wCeXeO2NKTcDOFn1mDupdXtPsqDEPF6NFJDYRc6LNWJJpRAZLguIt/pub?gid=1817499306&single=true&output=csv",
   cacheTtlMs: 5 * 60 * 1000,
@@ -97,6 +100,7 @@ export const CAT_ICONS: Record<string, string> = {
   Importados: "🌍",
   Combos: "🎁",
   "Cuidado corporal": "🛁",
+  Uñas: "💅",
 }
 
 export const CATEGORIES = [
@@ -112,6 +116,7 @@ export const CATEGORIES = [
   { key: "Accesorios",         label: "💎 Accesorios",       name: "Accesorios" },
   { key: "Importados",         label: "🌍 Importados",       name: "Importados" },
   { key: "Cuidado corporal",   label: "🛁 Cuidado corporal", name: "Cuidado corporal" },
+  { key: "Uñas",               label: "💅 Uñas",             name: "Uñas" },
 ]
 
 export const BADGE_STYLES: Record<string, { bg: string; text: string }> = {

@@ -4,11 +4,24 @@ import Image from "next/image"
 import { useEffect, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { CONFIG } from "@/lib/config"
+import { parseBannersCsv } from "@/lib/csv-parser"
+import type { Banner } from "@/types"
 import { useStore } from "@/contexts/store"
 
 export function BannerCarousel() {
   const [idx, setIdx] = useState(0)
-  const banners = CONFIG.heroBanners
+  const [banners, setBanners] = useState<Banner[]>(CONFIG.heroBanners as Banner[])
+
+  useEffect(() => {
+    if (!CONFIG.bannersUrl) return
+    fetch(CONFIG.bannersUrl)
+      .then((r) => r.text())
+      .then((csv) => {
+        const parsed = parseBannersCsv(csv)
+        if (parsed.length) setBanners(parsed)
+      })
+      .catch(() => {/* usa CONFIG.heroBanners como fallback */})
+  }, [])
 
   useEffect(() => {
     if (banners.length < 2) return
