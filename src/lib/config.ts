@@ -85,7 +85,7 @@ export const CONFIG = {
   // tipo: "porcentaje" o "fijo" | activo: "si" o "no"
   // Ejemplo fila: BYFLY10,porcentaje,10,50000,si
   // Dejar vacío para deshabilitar descuentos
-  discountsUrl: "",
+  discountsUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQo4RhtucI4m_U32VCNzNy2E33wCeXeO2NKTcDOFn1mDupdXtPsqDEPF6NFJDYRc6LNWJJpRAZLguIt/pub?gid=1542421382&single=true&output=csv",
 }
 
 export const CAT_ICONS: Record<string, string> = {

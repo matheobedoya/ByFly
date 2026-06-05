@@ -157,16 +157,25 @@ const StoreContext = createContext<StoreContextValue | null>(null)
 let toastId = 0
 
 function parseDiscountsCsv(csv: string): Discount[] {
-  const lines = csv.trim().split("\n").slice(1) // skip header row
+  const lines = csv.trim().split(/\r?\n/).slice(1)
   const result: Discount[] = []
   for (const line of lines) {
-    const [code, tipo, valor, minPedido, activo] = line.split(",").map((v) => v.trim())
+    const cols: string[] = []
+    let cur = "", inQ = false
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"' && !inQ) inQ = true
+      else if (line[i] === '"' && inQ) inQ = false
+      else if (line[i] === "," && !inQ) { cols.push(cur); cur = "" }
+      else cur += line[i]
+    }
+    cols.push(cur)
+    const [code, tipo, valor, minPedido, activo] = cols.map((v) => v.trim())
     if (!code) continue
     result.push({
       code: code.toUpperCase(),
       tipo: tipo === "fijo" ? "fijo" : "porcentaje",
-      valor: parseFloat(valor) || 0,
-      minPedido: parseFloat(minPedido) || 0,
+      valor: parseFloat(valor.replace(/[^0-9.]/g, "")) || 0,
+      minPedido: parseFloat((minPedido || "0").replace(/[^0-9.]/g, "")) || 0,
       activo: activo?.toLowerCase() === "si",
     })
   }
