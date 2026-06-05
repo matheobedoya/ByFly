@@ -21,14 +21,14 @@ function ToastContent() {
     if (!state.toast || state.toast.id === prevToastId.current) return
     prevToastId.current = state.toast.id
 
-    // Animate: empty → compact → (wait) → empty
-    // Use dispatch directly to close — setSize guards against going back to previousSize
-    setSize(SIZE_PRESETS.COMPACT)
+    // Dispatch directo para saltarse el guard de setSize (que bloquea EMPTY→COMPACT
+    // cuando previousSize ya era COMPACT, causando el cuadrado negro colgado)
+    dispatch({ type: "SET_SIZE", newSize: SIZE_PRESETS.COMPACT })
     const timer = setTimeout(() => {
       dispatch({ type: "SET_SIZE", newSize: SIZE_PRESETS.EMPTY })
     }, 2600)
     return () => clearTimeout(timer)
-  }, [state.toast, setSize, dispatch])
+  }, [state.toast, dispatch])
 
   if (!state.toast) return null
 

@@ -389,7 +389,7 @@ const DynamicIslandContent = ({
           clipPath: `url(#squircle-${state.size})`,
         },
       }}
-      style={{ willChange }}
+      style={{ willChange, visibility: state.size === SIZE_PRESETS.EMPTY ? "hidden" : "visible" }}
       {...props}
     >
       <AnimatePresence>{children}</AnimatePresence>
