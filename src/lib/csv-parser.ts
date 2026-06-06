@@ -1,6 +1,6 @@
 import type { Product, Variant, Banner } from "@/types"
 
-export function fixDriveUrl(url: string, sz = "w600"): string {
+export function fixDriveUrl(url: string, sz = "w400"): string {
   if (!url) return ""
   if (url.includes("thumbnail?id=") || url.includes("lh3.googleusercontent.com"))
     return url
@@ -118,7 +118,7 @@ export function parseBannersCsv(text: string): Banner[] {
     const rawImg = g(0)
     banners.push({
       id: i + 1,
-      img: rawImg ? fixDriveUrl(rawImg, "w1600") : "",
+      img: rawImg ? fixDriveUrl(rawImg, "w1200") : "",
       title: g(1),
       subtitle: g(2),
       cta: g(3) || "Ver más",

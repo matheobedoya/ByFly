@@ -154,7 +154,7 @@ export function ProductGallery({ product }: ProductGalleryProps) {
                   alt={product.name}
                   fill
                   className="object-cover"
-                  loading={i === 0 ? "eager" : "lazy"}
+                  loading="lazy"
                   sizes="(max-width: 640px) 50vw, 215px"
                   onError={() => markFailed(i)}
                 />
