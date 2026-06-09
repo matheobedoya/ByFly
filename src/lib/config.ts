@@ -65,6 +65,7 @@ export const CONFIG = {
   themeColor: "#C2185B",
   city: "Colombia",
   analyticsId: "",
+  ga4Id: "G-GFCJF4X7ND",
 
   // — Modo del sitio —
   siteMode: "catalog" as "catalog" | "services" | "restaurant",

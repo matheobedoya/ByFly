@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Cormorant_Garamond, Jost, Geist_Mono } from "next/font/google"
+import Script from "next/script"
 import "./globals.css"
 import { CONFIG } from "@/lib/config"
 import { JsonLd } from "@/components/json-ld"
@@ -46,6 +47,7 @@ export const metadata: Metadata = {
 }
 
 const analyticsId = (CONFIG as Record<string, unknown>).analyticsId as string
+const ga4Id = CONFIG.ga4Id
 
 export default function RootLayout({
   children,
@@ -68,6 +70,22 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-pink-soft text-foreground overflow-x-hidden">
         <JsonLd />
         {children}
+        {ga4Id && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${ga4Id}`}
+              strategy="afterInteractive"
+            />
+            <Script id="ga4-init" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${ga4Id}');
+              `}
+            </Script>
+          </>
+        )}
       </body>
     </html>
   )
