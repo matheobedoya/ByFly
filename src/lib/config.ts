@@ -2,6 +2,7 @@ export const CONFIG = {
   // — Contacto —
   whatsapp: "573147397938",
   instagram: "https://instagram.com/byfly_makeup",
+  tiktok: "https://www.tiktok.com/@byfly.makeup",
 
   // — Negocio —
   minimoMayorista: 130000,
