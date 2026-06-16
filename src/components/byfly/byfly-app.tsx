@@ -13,17 +13,21 @@ import { IslandToast } from "./island-toast"
 import { SocialFab } from "./social-fab"
 import { AboutSection } from "./about-section"
 import { AnnouncementBar } from "./announcement-bar"
+import { NewestSection } from "./newest-section"
+import { SalesPopup } from "./sales-popup"
 
 export function ByflyApp() {
   return (
     <StoreProvider>
       <IslandToast />
+      <SalesPopup />
       <AnnouncementBar />
       <Header />
       <FilterBar />
       <BannerCarousel />
       <HeroSection />
       {CONFIG.aboutText && <AboutSection />}
+      <NewestSection />
       <ProductGrid />
       {CONFIG.siteMode === "catalog" && <CartDrawer />}
       <AdminPanel />
