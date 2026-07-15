@@ -34,6 +34,7 @@ export function CartDrawer() {
 
   const sendToWhatsApp = () => {
     if (!cart.length) { showToast("⚠️ El carrito está vacío"); return }
+    if (!clientName.trim()) { showToast("👤 Escribe tu nombre para continuar"); return }
     if (mayorWarning) return
     const mode = priceMode === "detal" ? "Detal" : "Mayorista"
     let msg = `${CONFIG.brandEmoji} *Pedido ${CONFIG.brandName} ${CONFIG.brandSub}*\n`
@@ -263,7 +264,7 @@ export function CartDrawer() {
               </div>
               <div className="mb-[7px]">
                 <label className="text-[10px] font-semibold text-pink-dark uppercase tracking-[0.5px] block mb-[3px]">
-                  Tu nombre
+                  Tu nombre <span className="text-[#e91e63]">*</span>
                 </label>
                 <input
                   type="text"
@@ -272,7 +273,9 @@ export function CartDrawer() {
                   placeholder="Ej: María García"
                   maxLength={60}
                   autoComplete="name"
-                  className="w-full px-[13px] py-2 border-[1.5px] border-[#f0d0dc] rounded-[10px] font-sans text-[13px] text-[#1a1a2e] outline-none transition-all focus:border-pink focus:shadow-[0_0_0_3px_rgba(240,98,146,0.08)]"
+                  className={`w-full px-[13px] py-2 border-[1.5px] rounded-[10px] font-sans text-[13px] text-[#1a1a2e] outline-none transition-all focus:border-pink focus:shadow-[0_0_0_3px_rgba(240,98,146,0.08)] ${
+                    !clientName.trim() ? "border-[#f48fb1] bg-[#fff8fc]" : "border-[#f0d0dc]"
+                  }`}
                 />
               </div>
               <div className="mb-2.5">
