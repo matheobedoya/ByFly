@@ -3,7 +3,7 @@
 import Image from "next/image"
 import { useMemo } from "react"
 import { useStore } from "@/contexts/store"
-import { CAT_ICONS, CATEGORIES, BADGE_LABELS } from "@/lib/config"
+import { CAT_ICONS, CATEGORIES, BADGE_LABELS, CONFIG } from "@/lib/config"
 import { ProductCard } from "./product-card"
 import { DistortedGlass } from "@/components/ui/distorted-glass"
 
@@ -21,6 +21,8 @@ export function ProductGrid() {
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
+      if (!CONFIG.mostrarImportados && p.cat === "Importados") return false
+
       // Soporte para filtro por badge: key "badge:Nuevo", "badge:Viral TikTok", etc.
       const mc =
         currentCat === "todos"

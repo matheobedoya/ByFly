@@ -12,7 +12,7 @@ const steps = [
     num: "01",
     icon: "🔍",
     title: "Explora el catálogo",
-    desc: "Navega por nuestras categorías: Piel, Labios, Ojos, Skincare, Brochas, Accesorios e Importados. Usa el buscador para encontrar un producto o marca específica.",
+    desc: "Navega por nuestras categorías: Piel, Labios, Ojos, Skincare, Brochas y Accesorios. Usa el buscador para encontrar un producto o marca específica.",
   },
   {
     num: "02",

@@ -1,3 +1,7 @@
+// — Sección Importados desactivada temporalmente — poner en true para reactivar —
+// Oculta la categoría "Importados" del filtro, del catálogo y del banner promocional.
+const MOSTRAR_IMPORTADOS = false
+
 export const CONFIG = {
   // — Contacto —
   whatsapp: "573147397938",
@@ -7,6 +11,8 @@ export const CONFIG = {
   // — Negocio —
   minimoMayorista: 130000,
   stockBajoUmbral: 1,
+
+  mostrarImportados: MOSTRAR_IMPORTADOS,
 
   // — Admin —
   adminPassword: "tuyyo4ever",
@@ -38,6 +44,7 @@ export const CONFIG = {
       cta: "Ver combos",
       ctaLink: "#",
       bg: "linear-gradient(135deg, #880E4F 0%, #C2185B 55%, #F06292 100%)",
+      importados: false,
     },
     {
       id: 2,
@@ -47,6 +54,7 @@ export const CONFIG = {
       cta: "Ver importados",
       ctaLink: "#",
       bg: "linear-gradient(135deg, #4A148C 0%, #7B1FA2 55%, #CE93D8 100%)",
+      importados: true,
     },
     {
       id: 3,
@@ -56,8 +64,9 @@ export const CONFIG = {
       cta: "Hacer mi pedido",
       ctaLink: "#",
       bg: "linear-gradient(135deg, #B71C1C 0%, #E53935 55%, #EF9A9A 100%)",
+      importados: false,
     },
-  ],
+  ].filter((b) => MOSTRAR_IMPORTADOS || !b.importados),
 
   // — SEO —
   siteUrl: "https://byfly.com.co",
@@ -119,7 +128,7 @@ export const CATEGORIES = [
   { key: "Importados",         label: "🌍 Importados",       name: "Importados" },
   { key: "Cuidado corporal",   label: "🛁 Cuidado corporal", name: "Cuidado corporal" },
   { key: "Uñas",               label: "💅 Uñas",             name: "Uñas" },
-]
+].filter((c) => MOSTRAR_IMPORTADOS || c.key !== "Importados")
 
 export const BADGE_STYLES: Record<string, { bg: string; text: string }> = {
   Bestseller:      { bg: "rgba(255,193,7,0.92)",   text: "#5d4037" },

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useStore } from "@/contexts/store"
+import { CONFIG } from "@/lib/config"
 
 const NAMES = [
   "Valentina", "Camila", "Daniela", "Sofía", "Isabella",
@@ -36,7 +37,9 @@ export function SalesPopup() {
   const started = useRef(false)
 
   useEffect(() => {
-    productsRef.current = state.products
+    productsRef.current = CONFIG.mostrarImportados
+      ? state.products
+      : state.products.filter((p) => p.cat !== "Importados")
   }, [state.products])
 
   useEffect(() => {

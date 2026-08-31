@@ -2,6 +2,7 @@
 
 import { useMemo, useRef } from "react"
 import { useStore } from "@/contexts/store"
+import { CONFIG } from "@/lib/config"
 import { ProductCard } from "./product-card"
 
 export function NewestSection() {
@@ -10,7 +11,10 @@ export function NewestSection() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const newest = useMemo(
-    () => products.filter((p) => p.badge === "Nuevo"),
+    () =>
+      products.filter(
+        (p) => p.badge === "Nuevo" && (CONFIG.mostrarImportados || p.cat !== "Importados")
+      ),
     [products]
   )
 
