@@ -8,7 +8,6 @@ import { FilterBar } from "./filter-bar"
 import { HeroSection, BannerCarousel } from "./hero-section"
 import { ProductGrid } from "./product-grid"
 import { CartDrawer } from "./cart-drawer"
-import { AdminPanel } from "./admin-panel"
 import { IslandToast } from "./island-toast"
 import { SocialFab } from "./social-fab"
 import { AboutSection } from "./about-section"
@@ -30,7 +29,6 @@ export function ByflyApp() {
       <NewestSection />
       <ProductGrid />
       {CONFIG.siteMode === "catalog" && <CartDrawer />}
-      <AdminPanel />
       <SocialFab />
 
       {/* Footer mínimo con links de subpáginas */}

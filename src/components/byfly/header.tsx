@@ -82,16 +82,6 @@ export function Header() {
               </span>
             </button>
           )}
-
-          {/* Admin */}
-          <button
-            aria-label="Panel de administración"
-            onClick={() => dispatch({ type: "SET_ADMIN_OPEN", open: true })}
-            className="text-white/65 border border-white/20 rounded-lg px-[13px] py-2 text-sm cursor-pointer transition-all hover:bg-white/20 hover:text-white"
-            style={{ background: "rgba(255,255,255,0.1)" }}
-          >
-            ⚙️
-          </button>
         </div>
       </div>
     </header>

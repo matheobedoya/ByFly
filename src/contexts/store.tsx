@@ -27,13 +27,8 @@ type Action =
   | { type: "REMOVE_FROM_CART"; cartKey: string }
   | { type: "SET_CART"; cart: CartItem[] }
   | { type: "SET_CART_OPEN"; open: boolean }
-  | { type: "SET_ADMIN_OPEN"; open: boolean }
   | { type: "SHOW_TOAST"; toast: ToastMessage }
   | { type: "CLEAR_TOAST" }
-  | { type: "ADD_LOCAL_PRODUCT"; product: Product }
-  | { type: "UPDATE_LOCAL_PRODUCT"; id: number; updates: Partial<Product> }
-  | { type: "DELETE_LOCAL_PRODUCTS"; ids: number[] }
-  | { type: "REPLACE_PRODUCTS"; products: Product[] }
   | { type: "SET_DISCOUNTS"; discounts: Discount[] }
   | { type: "SET_DISCOUNT_INPUT"; code: string }
   | { type: "APPLY_DISCOUNT"; discount: Discount }
@@ -51,7 +46,6 @@ const initialState: StoreState = {
   quantities: {},
   selectedTones: {},
   cartOpen: false,
-  adminOpen: false,
   toast: null,
   discounts: [],
   discountInput: "",
@@ -103,29 +97,10 @@ function reducer(state: StoreState, action: Action): StoreState {
       return { ...state, cart: action.cart }
     case "SET_CART_OPEN":
       return { ...state, cartOpen: action.open }
-    case "SET_ADMIN_OPEN":
-      return { ...state, adminOpen: action.open }
     case "SHOW_TOAST":
       return { ...state, toast: action.toast }
     case "CLEAR_TOAST":
       return { ...state, toast: null }
-    case "ADD_LOCAL_PRODUCT":
-      return { ...state, products: [...state.products, action.product] }
-    case "UPDATE_LOCAL_PRODUCT":
-      return {
-        ...state,
-        products: state.products.map((p) =>
-          p.id === action.id ? { ...p, ...action.updates } : p
-        ),
-      }
-    case "DELETE_LOCAL_PRODUCTS":
-      return {
-        ...state,
-        products: state.products.filter((p) => !action.ids.includes(p.id)),
-        cart: state.cart.filter((c) => !action.ids.includes(c.id)),
-      }
-    case "REPLACE_PRODUCTS":
-      return { ...state, products: action.products, cart: [] }
     case "SET_DISCOUNTS":
       return { ...state, discounts: action.discounts }
     case "SET_DISCOUNT_INPUT":

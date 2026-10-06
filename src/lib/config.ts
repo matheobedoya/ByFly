@@ -14,10 +14,6 @@ export const CONFIG = {
 
   mostrarImportados: MOSTRAR_IMPORTADOS,
 
-  // — Admin —
-  adminPassword: "tuyyo4ever",
-  scriptsWriteUrl: "https://script.google.com/macros/s/AKfycbwY98-Nu5gSyP0j7ddOyKO7cK4Z9EicR8i6gTMO3Yec2uzIIPQJ0-KBVQj8shcV8b584g/exec",
-
   // — Marca —
   logo: "/ilogo-byfly.png",
   brandName: "BYFLY",

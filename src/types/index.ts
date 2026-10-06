@@ -67,7 +67,6 @@ export interface StoreState {
   quantities: Record<number, number>
   selectedTones: Record<number, string>
   cartOpen: boolean
-  adminOpen: boolean
   toast: ToastMessage | null
   discounts: Discount[]
   discountInput: string
