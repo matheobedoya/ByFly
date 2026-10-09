@@ -17,7 +17,14 @@ export function ProductGallery({ product }: ProductGalleryProps) {
   const [mounted, setMounted] = useState(false)
   const justOpened = useRef(false)
 
-  const imgs = [product.img1, product.img2, product.img3].filter(Boolean)
+  const imgs = [
+    product.img1,
+    product.img2,
+    product.img3,
+    product.img4,
+    product.img5,
+    product.img6,
+  ].filter(Boolean)
 
   useEffect(() => { setMounted(true) }, [])
 

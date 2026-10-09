@@ -34,6 +34,7 @@ function parsePrice(v: string): number | null {
 
 // Columns: 0:nombre 1:marca 2:cat 3:detal 4:mayor 5:img1 6:img2 7:img3
 //          8:tono   9:surtido 10:badge 11:disponible 12:stock 13:costo
+//          14:sku 15:descripcion 16:img4 17:img5 18:img6
 export function parseCsv(text: string): Product[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim())
   if (!lines.length) return []
@@ -75,6 +76,9 @@ export function parseCsv(text: string): Product[] {
       if (!prod.img1 && g(5)) prod.img1 = fixDriveUrl(g(5))
       if (!prod.img2 && g(6)) prod.img2 = fixDriveUrl(g(6))
       if (!prod.img3 && g(7)) prod.img3 = fixDriveUrl(g(7))
+      if (!prod.img4 && g(16)) prod.img4 = fixDriveUrl(g(16))
+      if (!prod.img5 && g(17)) prod.img5 = fixDriveUrl(g(17))
+      if (!prod.img6 && g(18)) prod.img6 = fixDriveUrl(g(18))
       if (!prod.cat && g(2)) prod.cat = g(2)
       prod.variantes.push(variante)
     } else {
@@ -88,6 +92,9 @@ export function parseCsv(text: string): Product[] {
         img1: fixDriveUrl(g(5)),
         img2: fixDriveUrl(g(6)),
         img3: fixDriveUrl(g(7)),
+        img4: fixDriveUrl(g(16)),
+        img5: fixDriveUrl(g(17)),
+        img6: fixDriveUrl(g(18)),
         surtido: g(9).toLowerCase() === "si",
         badge: g(10),
         variantes: [variante],
