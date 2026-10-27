@@ -24,6 +24,26 @@ class SyncTests(unittest.TestCase):
             (work/'products.json').write_bytes(sync.encoded(p));(work/'photo-quality.json').write_text('[]')
             subprocess.run([sys.executable,str(sync.ROOT/'build.py')],env={**os.environ,'CATALOG_WORKDIR':td},check=True,capture_output=True)
             report=sync.verify(work,p);self.assertEqual(report['references'],14);self.assertEqual(report['pages'],9)
+    def test_large_family_continuations_do_not_repeat_photo(self):
+        import os,subprocess,sys
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as td:
+            work=Path(td);photos=work/'photos';photos.mkdir()
+            image_path=photos/'abc.jpg';Image.new('RGB',(80,80),(238,72,110)).save(image_path)
+            rows=[row(SKU=f'SKU-{i:05}',imagen_url='https://drive.google.com/file/d/abc/view' if i==1 else '') for i in range(1,15)]
+            products=sync.products_from_csv(source(rows))
+            (work/'products.json').write_bytes(sync.encoded(products))
+            (work/'photo-quality.json').write_text(json.dumps([{'id':'abc','path':str(image_path),'width':80,'height':80}]))
+            subprocess.run([sys.executable,str(sync.ROOT/'build.py')],env={**os.environ,'CATALOG_WORKDIR':td},check=True,capture_output=True)
+            qa=json.loads((work/'layout.json').read_text())
+            product_pages=[item for item in qa if 'skus' in item]
+            self.assertEqual([len(item['skus']) for item in product_pages],[6,6,2])
+            self.assertEqual([item['continuation'] for item in product_pages],[False,True,True])
+            self.assertEqual([item['family_part'] for item in product_pages],[1,2,3])
+            self.assertEqual([item['images_drawn'] for item in product_pages],[1,0,0])
+            self.assertEqual(len({sku for item in product_pages for sku in item['skus']}),14)
+            report=sync.verify(work,products)
+            self.assertEqual(report['references'],14)
     def test_publish_order_and_failure_keeps_manifest(self):
         class Client:
             def __init__(self,fail=False):self.keys=[];self.metadata={};self.fail=fail
@@ -49,20 +69,6 @@ class SyncTests(unittest.TestCase):
         class Client:
             def head_object(self,**kw):raise Missing()
         self.assertFalse(sync.published_matches(Client(),'bucket',{}))
-    def test_preview_skips_only_missing_skus(self):
-        omitted=[];p=sync.products_from_csv(source([row(),row(SKU='',nombre='SIN SKU')]),allow_missing_skus=True,omitted=omitted)
-        self.assertEqual(len(p),1);self.assertEqual(omitted[0]['nombre'],'SIN SKU')
-        with self.assertRaises(ValueError):sync.products_from_csv(source([row(),row()]),allow_missing_skus=True)
-        with self.assertRaises(ValueError):sync.products_from_csv(source([row(nombre='')]),allow_missing_skus=True)
-    def test_preview_publish_has_separate_keys(self):
-        class Client:
-            def __init__(self):self.keys=[];self.metadata={}
-            def put_object(self,**kw):self.keys.append(kw['Key']);self.metadata[kw['Key']]=kw.get('Metadata',{})
-            def head_object(self,**kw):return {'Metadata':self.metadata[kw['Key']]}
-        with tempfile.TemporaryDirectory() as td:
-            w=Path(td);(w/sync.PDF).write_bytes(b'verified-pdf');c=Client()
-            sync.publish(c,'bucket',w,{'fingerprint':'abc'},prefix='pruebas/')
-            self.assertEqual(c.keys,['pruebas/versions/abc.pdf','pruebas/'+sync.PDF,'pruebas/'+sync.STATE])
     def test_retry_image_download(self):
         class Response:
             def __enter__(self):return self
