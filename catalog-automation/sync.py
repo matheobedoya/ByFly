@@ -28,7 +28,7 @@ def numeric(value):
     if not math.isfinite(n) or n<0:raise ValueError('Valor numérico inválido')
     return n
 
-def products_from_csv(raw,allow_missing_skus=False,omitted=None):
+def products_from_csv(raw):
     reader=csv.DictReader(io.StringIO(raw.decode('utf-8-sig')))
     required={'SKU','nombre','categoria','precio_detal','precio_mayor','stock','disponible','imagen_url'}
     if not required<=set(reader.fieldnames or []):raise ValueError('Faltan columnas requeridas: '+', '.join(sorted(required-set(reader.fieldnames or []))))
@@ -37,9 +37,6 @@ def products_from_csv(raw,allow_missing_skus=False,omitted=None):
         if not any(str(v or '').strip() for v in r.values()):continue
         sku=(r.get('SKU') or '').strip();name=(r.get('nombre') or '').strip()
         if not sku and not name:continue # blank formatted rows
-        if not sku and name and allow_missing_skus:
-            if omitted is not None:omitted.append({'fila':row_number,'nombre':name,'tono':(r.get('tono') or '').strip()})
-            continue
         if not sku or not name:raise ValueError(f'Fila {row_number}: SKU y nombre son obligatorios ({name or sku})')
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,45}',sku):raise ValueError('Formato de SKU no admitido: '+sku)
         if sku in seen:raise ValueError('SKU duplicado: '+sku)
@@ -109,7 +106,6 @@ def download_photos(ids,work):
             result.append(item)
             if i%50==0 or i==len(ids):print(f'Fotos descargadas: {i}/{len(ids)}',flush=True)
     (work/'photo-quality.json').write_bytes(encoded(result))
-    return result
 
 def verify(work,products):
     import fitz
@@ -134,7 +130,8 @@ def verify(work,products):
                 n=bysku[sku][key];price='$'+f'{n:,.0f}'.replace(',','.') if n else 'Consultar'
                 if price not in text:raise ValueError('Precio no coincide: '+sku)
     if len(found)!=len(products) or set(found)!=set(bysku) or len(found)!=len(set(found)):raise ValueError('Cobertura de referencias inválida')
-    if len(wa)!=1 or 'NOVEDADES' not in d[1].get_text():raise ValueError('Novedades o contacto inválido')
+    contact_page=len(d)
+    if wa.count(contact_page)!=1 or 'NOVEDADES' not in d[1].get_text():raise ValueError('Novedades o enlace WhatsApp en contacto inválido')
     report={'references':len(found),'pages':len(d),'missing_image_families':len({(p['category'],p['name'],p['brand']) for p in products if not p['family_images']}),'whatsapp_pages':wa,'bytes':(work/PDF).stat().st_size}
     (work/'verification.json').write_bytes(encoded(report));return report
 
@@ -159,45 +156,33 @@ def published_matches(client,bucket,state):
         raise
     return head.get('ContentLength',0)>0 and head.get('Metadata',{}).get('sha256')==state.get('pdf_sha256')
 
-def publish(client,bucket,work,state,prefix=""):
-    raw=(work/PDF).read_bytes();version=prefix+'versions/'+state['fingerprint']+'.pdf'
-    for key in (version,prefix+PDF):
+def publish(client,bucket,work,state):
+    raw=(work/PDF).read_bytes();version='versions/'+state['fingerprint']+'.pdf'
+    for key in (version,PDF):
         client.put_object(Bucket=bucket,Key=key,Body=raw,ContentType='application/pdf',CacheControl='public,max-age=31536000,immutable' if key==version else 'no-cache,max-age=0,must-revalidate',Metadata={'sha256':digest(raw)})
         if client.head_object(Bucket=bucket,Key=key)['Metadata'].get('sha256')!=digest(raw):raise RuntimeError('No se verificó la publicación')
     # Commit the manifest last: failed builds never replace it.
-    client.put_object(Bucket=bucket,Key=prefix+STATE,Body=encoded(state),ContentType='application/json',CacheControl='no-store')
+    client.put_object(Bucket=bucket,Key=STATE,Body=encoded(state),ContentType='application/json',CacheControl='no-store')
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--local-csv');parser.add_argument('--preview',action='store_true',help='Prueba separada que omite filas sin SKU');parser.add_argument('--force',action='store_true');parser.add_argument('--workdir',default=str(ROOT/'work'));args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--local-csv');parser.add_argument('--force',action='store_true');parser.add_argument('--workdir',default=str(ROOT/'work'));args=parser.parse_args()
     work=Path(args.workdir).resolve();work.mkdir(parents=True,exist_ok=True)
-    local=bool(args.local_csv);client=None if local else s3_client();bucket=os.environ.get('R2_BUCKET','byflycatalogo');previous={} if local or args.preview else read_state(client,bucket)
+    local=bool(args.local_csv);client=None if local else s3_client();bucket=os.environ.get('R2_BUCKET','byflycatalogo');previous={} if local else read_state(client,bucket)
     raw=Path(args.local_csv).read_bytes() if local else fetch(os.environ.get('CATALOG_SHEET_URL') or DEFAULT_URL)
-    omitted=[];products=products_from_csv(raw,allow_missing_skus=args.preview,omitted=omitted)
-    if args.preview:
-        with (work/'filas_omitidas.csv').open('w',encoding='utf-8-sig',newline='') as f:
-            w=csv.DictWriter(f,fieldnames=['fila','nombre','tono']);w.writeheader();w.writerows(omitted)
-        print(f'PRUEBA: {len(omitted)} filas sin SKU omitidas. Publicación separada en pruebas/.',flush=True)
+    products=products_from_csv(raw)
     if previous.get('references') and len(products)<previous['references']*.8 and not args.force:raise ValueError('La hoja perdió más del 20% de referencias. Revisar antes de forzar una ejecución manual.')
     print(f'Referencias válidas: {len(products)}',flush=True)
-    if args.preview:
-        ids=sorted({fid for p in products for fid in p['family_images']})
-        downloaded=download_photos(ids,work)
-        photos={x['id']:digest(Path(x['path']).read_bytes()) for x in downloaded}
-    else:ids,photos=inspect_photos(products,work)
+    ids,photos=inspect_photos(products,work)
     # Includes code/assets: a layout correction also triggers regeneration.
     code_hash=digest(b''.join(p.read_bytes() for p in sorted(ROOT.rglob('*')) if p.is_file() and (p.suffix in ('.py','.ttf','.png','.txt')) and 'work' not in p.parts and '__pycache__' not in p.parts))
     fingerprint=digest(encoded({'products':products,'images':photos,'generator':code_hash}))
     if fingerprint==previous.get('fingerprint') and not args.force and published_matches(client,bucket,previous):
         print('Sin cambios: se conserva el PDF publicado.');return
-    if not args.preview:download_photos(ids,work)
-    (work/'products.json').write_bytes(encoded(products))
-    subprocess.run([sys.executable,str(ROOT/'build.py')],env={**os.environ,'CATALOG_WORKDIR':str(work),'CATALOG_PREVIEW':f'PRUEBA · {len(products)} referencias con SKU · {len(omitted)} filas omitidas' if args.preview else ''},check=True)
+    download_photos(ids,work);(work/'products.json').write_bytes(encoded(products))
+    subprocess.run([sys.executable,str(ROOT/'build.py')],env={**os.environ,'CATALOG_WORKDIR':str(work)},check=True)
     report=verify(work,products)
-    prefix='pruebas/' if args.preview else ''
-    state={**report,'preview':args.preview,'omitted_rows':len(omitted),'fingerprint':fingerprint,'updated_at':datetime.now(timezone.utc).isoformat(),'pdf':prefix+PDF,'version':prefix+'versions/'+fingerprint+'.pdf','pdf_sha256':digest((work/PDF).read_bytes())}
-    if not local:
-        if args.preview:publish(client,bucket,work,state,prefix=prefix)
-        else:publish(client,bucket,work,state)
+    state={**report,'fingerprint':fingerprint,'updated_at':datetime.now(timezone.utc).isoformat(),'pdf':PDF,'version':'versions/'+fingerprint+'.pdf','pdf_sha256':digest((work/PDF).read_bytes())}
+    if not local:publish(client,bucket,work,state)
     (work/STATE).write_bytes(encoded(state))
     # Export only public columns for manual classification/photo review.
     fields=['sku','name','brand','tone','source_category','category','category_reason','new','retail','wholesale','stock','available']
