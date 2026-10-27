@@ -16,11 +16,24 @@ SOURCE=Path(__import__('os').environ.get('CATALOG_WORKDIR',str(R/'work')))
 P=json.loads((SOURCE/'products.json').read_text());PH={x['id']:x['path'] for x in json.loads((SOURCE/'photo-quality.json').read_text())}
 ORDER=['Combos','Rostro','Preparación y fijación','Ojos y cejas','Labios','Skincare','Brochas y esponjas','Cuidado corporal','Cabello','Uñas','Accesorios']
 ORDER=[c for c in ORDER if any(p['category']==c for p in P)]+sorted({p['category'] for p in P}-set(ORDER))
-F=collections.OrderedDict()
-for p in sorted(P,key=lambda x:(ORDER.index(x['category']),product_order(x))):F.setdefault((p['category'],p['name'].upper(),p['brand'].upper()),[]).append(p)
-F=[family[i:i+6] for family in F.values() for i in range(0,len(family),6)];NEW=[f for f in F if any(p['new'] for p in f)]
+_families=collections.OrderedDict()
+for p in sorted(P,key=lambda x:(ORDER.index(x['category']),product_order(x))):
+ _families.setdefault((p['category'],p['name'].upper(),p['brand'].upper()),[]).append(p)
 source_order={p['sku']:i for i,p in enumerate(P)}
-NEW.sort(key=lambda f:max(source_order[p['sku']] for p in f if p['new']),reverse=True)
+F=[];_new_families=[]
+for family in _families.values():
+ chunks=[family[i:i+6] for i in range(0,len(family),6)]
+ for part_index,chunk in enumerate(chunks):
+  for q in chunk:
+   q['_family_part']=part_index+1
+   q['_family_parts']=len(chunks)
+   q['_family_continuation']=part_index>0
+  F.append(chunk)
+ if any(q['new'] for q in family):
+  last_new=max(source_order[q['sku']] for q in family if q['new'])
+  # Una familia aparece una sola vez en Novedades, aunque sus SKU ocupen varias fichas.
+  _new_families.append((last_new,chunks[0]))
+NEW=[group for _,group in sorted(_new_families,key=lambda item:item[0],reverse=True)]
 class Edition(Catalog):
  def __init__(self,path):
   self.desktop=False;self.w,self.h=(560,700)
@@ -76,7 +89,7 @@ class Edition(Catalog):
   self.start('cover','Portada');w,h=self.w,self.h
   self.box(0,0,w,h,PALE,r=0);self.brand(w/2-110,h-115,220)
   self.text(w/2,h-145,'CATÁLOGO · DETAL + MAYORISTA',11,'Arsenal-Bold',DARK,'center')
-  if os.environ.get('CATALOG_PREVIEW'):self.text(w/2,h-166,('VISTA PREVIA DE DISEÑO · selección de productos' if os.environ['CATALOG_PREVIEW']=='1' else os.environ['CATALOG_PREVIEW']),9,color=MUTED,align='center')
+  if os.environ.get('CATALOG_PREVIEW'):self.text(w/2,h-166,'VISTA PREVIA DE DISEÑO · selección de productos',9,color=MUTED,align='center')
   self.text(w/2,h-221,'Ser tú.',58,'Karma-Medium',DARK,'center')
   self.text(w/2,h-253,'Aprender y mejorar para transformarte a ti misma.',16,'Karma-Regular',DARK,'center')
   picks=[]
@@ -140,8 +153,56 @@ class Edition(Catalog):
    self.text(x+cw-6,y,str(self.starts[cat]),13,'Arsenal-Bold',DARK,'right');self.rule(y-12,x,cw)
    self.c.linkRect('','category-'+cat,(x,y-12,x+cw,y+23),thickness=0)
   self.footer()
- def product(self,f):
+ def product_continuation(self,f):
+  """Render variant overflow without duplicating the family's product photo."""
   p=f[0];w,h=self.w,self.h;self.start('product-'+p['sku'])
+  self.head(p['category'])
+  x=28;tw=w-56
+  self.text(x,h-106,p['brand'] or 'BYFLY MAKEUP',10,'Arsenal-Bold',DARK)
+  tb=self.para(x,h-119,label(p['name']),tw,24,'Karma-Medium',INK,27)
+  note_y=tb-13
+  part=p.get('_family_part',2);parts=p.get('_family_parts',2)
+  self.text(x,note_y,f'Continuación de referencias {part} de {parts} · La imagen aparece en la primera ficha.',10,color=MUTED)
+  y=note_y-27
+  same=len(set((q['retail'],q['wholesale']) for q in f))==1
+  if same:
+   self.text(x,y,'PRECIO DETAL',9,'Arsenal-Bold',MUTED)
+   self.text(x+tw/2,y,'PRECIO MAYORISTA',9,'Arsenal-Bold',MUTED)
+   self.text(x,y-24,money(p['retail']) if p['retail']>0 else 'Consultar',21,'Arsenal-Bold',DARK)
+   self.text(x+tw/2,y-24,money(p['wholesale']) if p['wholesale']>0 else 'Consultar',21,'Arsenal-Bold',DARK)
+   y-=53
+  else:
+   self.text(x,y,'PRECIOS POR VARIANTE · COP',9,'Arsenal-Bold',DARK)
+   y-=20
+  self.text(x,y,'REFERENCIA',9,'Arsenal-Bold',MUTED)
+  self.text(x+105,y,'TONO / VARIANTE',9,'Arsenal-Bold',MUTED)
+  self.text(w-28,y,'ESTADO',9,'Arsenal-Bold',MUTED,'right')
+  y-=18
+  for q in f:
+   row_h=39 if same else 43
+   bottom=y-row_h+4
+   self.box(x,bottom,tw,row_h,'#FFF8FA',stroke=LINE,r=7)
+   self.text(x+10,bottom+row_h-15,q['sku'],10,'Arsenal-Bold',DARK)
+   tone=q['tone'] or ('Sin tono indicado' if len(f)>1 else 'Única')
+   tone=tone[:-2] if tone.endswith('.0') else tone
+   maxwidth=tw-235
+   fs=min(12,maxwidth/max(pdfmetrics.stringWidth(tone,'Arsenal-Regular',1),1))
+   self.text(x+105,bottom+row_h-15,tone,fs,'Arsenal-Regular',INK)
+   self.text(w-38,bottom+row_h-15,'Disponible' if q['available'] else 'AGOTADO',10,'Arsenal-Bold',DARK if q['available'] else MUTED,'right')
+   if not same:
+    price_line='Detal '+(money(q['retail']) if q['retail']>0 else 'Consultar')+' · Mayorista '+(money(q['wholesale']) if q['wholesale']>0 else 'Consultar')
+    self.text(x+10,bottom+8,price_line,9,'Arsenal-Regular',DARK)
+   y=bottom-5
+  if y<128:raise ValueError(f'Continuación de referencias invade CTA en página {self.page}: {y}')
+  available=any(q['available'] for q in f)
+  self.button(34,88,472,42,'Consultar por WhatsApp' if available else 'Preguntar por disponibilidad',url=self.whatsapp(p,p['tone'] if len(f)==1 else None),dark=available)
+  self.text(270,69,'Precio y disponibilidad sujetos a confirmación al hacer el pedido.',10,color=MUTED,align='center')
+  self.qa.append({'page':self.page,'skus':[q['sku'] for q in f],'category':p['category'],'image':False,'images_drawn':0,'continuation':True,'family_part':part,'family_parts':parts,'lowest_y':y,'image_height':0})
+  self.footer()
+ def product(self,f):
+  p=f[0]
+  if p.get('_family_continuation',False):return self.product_continuation(f)
+  w,h=self.w,self.h;self.start('product-'+p['sku'])
   if self.page==self.starts[p['category']]:self.c.bookmarkPage('category-'+p['category']);self.c.addOutlineEntry(p['category'],'category-'+p['category'],0,False)
   self.head(p['category'])
   if self.desktop:x,top,tw=572,h-106,360
@@ -198,7 +259,7 @@ class Edition(Catalog):
   if len(f)>1:self.text(gx,gy-12 if self.desktop else 49,'Imagen de referencia de la familia; verifica el tono por SKU.',9,color=MUTED)
   elif self.desktop:self.text(gx,gy-12,'Imagen de referencia del producto.',9,color=MUTED)
   if self.desktop:self.text(x,55,'Precios y disponibilidad sujetos a confirmación.',9,color=MUTED)
-  self.qa.append({'page':self.page,'skus':[q['sku'] for q in f],'category':p['category'],'image':bool(paths),'lowest_y':y,'image_height':gh})
+  self.qa.append({'page':self.page,'skus':[q['sku'] for q in f],'category':p['category'],'image':bool(paths),'images_drawn':1 if paths else 0,'continuation':False,'family_part':p.get('_family_part',1),'family_parts':p.get('_family_parts',1),'lowest_y':y,'image_height':gh})
   self.footer()
  def closing(self):
   self.start('contact','Contacto');w,h=self.w,self.h;self.brand(w/2-110,h-145,220)
