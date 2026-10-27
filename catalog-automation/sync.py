@@ -34,7 +34,7 @@ def products_from_csv(raw):
     reader=csv.DictReader(io.StringIO(raw.decode('utf-8-sig')))
     required={'SKU','nombre','categoria','precio_detal','precio_mayor','stock','disponible','imagen_url'}
     if not required<=set(reader.fieldnames or []):raise ValueError('Faltan columnas requeridas: '+', '.join(sorted(required-set(reader.fieldnames or []))))
-    products=[];seen=set()
+    products=[];seen=set();last_valid_source_category=None
     for row_number,r in enumerate(reader,2):
         if not any(str(v or '').strip() for v in r.values()):continue
         sku=(r.get('SKU') or '').strip();name=(r.get('nombre') or '').strip()
@@ -48,14 +48,27 @@ def products_from_csv(raw):
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,45}',sku):raise ValueError('Formato de SKU no admitido: '+sku)
         if sku in seen:raise ValueError('SKU duplicado: '+sku)
         seen.add(sku)
-        if not (r.get('categoria') or '').strip():raise ValueError('Categoría vacía: '+sku)
-        p={'sku':sku,'name':name,'brand':(r.get('marca') or '').strip(),'tone':(r.get('tono') or '').strip(),'category':(r.get('categoria') or '').strip() or 'Productos','retail':numeric(r.get('precio_detal')),'wholesale':numeric(r.get('precio_mayor')),'stock':numeric(r.get('stock'))}
+        source_category=(r.get('categoria') or '').strip()
+        if not source_category:
+            if not last_valid_source_category:
+                raise ValueError(
+                    f'Categoría vacía y no existe una categoría anterior válida para heredar: {sku} (fila {row_number})'
+                )
+            source_category=last_valid_source_category
+            print(
+                f'Categoría vacía: {sku}; se hereda la categoría anterior "{source_category}" (fila {row_number})',
+                flush=True,
+            )
+        p={'sku':sku,'name':name,'brand':(r.get('marca') or '').strip(),'tone':(r.get('tono') or '').strip(),'category':source_category,'retail':numeric(r.get('precio_detal')),'wholesale':numeric(r.get('precio_mayor')),'stock':numeric(r.get('stock'))}
         p['available']=(r.get('disponible') or '').strip().lower() in TRUE and p['stock']>0
         badges=[b.strip().lower() for b in re.split('[,;|]',r.get('badge') or '')]
         p['new']=(r.get('Nuevo') or '').strip().lower() in TRUE or 'nuevo' in badges
         p['badges']=badges;p['description']='';p['source_category']=p['category'];p['imported']=norm(p['category'])=='IMPORTADOS'
         if norm(p['category'])=='CUIDADO CORPORAL':p['category']='Cuidado corporal'
         p['category'],p['category_reason']=category(p)
+        # The next product with an empty source category inherits the previous
+        # product's final catalog category (after normalization/classification).
+        last_valid_source_category=p['category']
         p['image_ids']=[]
         for col in ('imagen_url','imagen_url2','imagen_url3','Img4','Img5','Img6'):
             url=(r.get(col) or '').strip()
