@@ -9,6 +9,8 @@ ROOT=Path(__file__).resolve().parent
 DEFAULT_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQo4RhtucI4m_U32VCNzNy2E33wCeXeO2NKTcDOFn1mDupdXtPsqDEPF6NFJDYRc6LNWJJpRAZLguIt/pub?gid=1817499306&single=true&output=csv'
 STATE='actualizacion.json';PDF='ByFly_Catalogo.pdf'
 TRUE={'si','sí','yes','1','true','nuevo'}
+# SKU excluidos intencionalmente del catálogo hasta nueva revisión.
+SKIP_SKUS={'SKU-00239'}
 def digest(data):return hashlib.sha256(data).hexdigest()
 def encoded(value):return json.dumps(value,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()
 def fetch(url):
@@ -37,6 +39,11 @@ def products_from_csv(raw):
         if not any(str(v or '').strip() for v in r.values()):continue
         sku=(r.get('SKU') or '').strip();name=(r.get('nombre') or '').strip()
         if not sku and not name:continue # blank formatted rows
+        # Skip configured SKUs before validating their required fields, so a deliberately
+        # excluded article with an empty category does not stop the entire build.
+        if sku in SKIP_SKUS:
+            print(f'SKU omitido por configuración: {sku}',flush=True)
+            continue
         if not sku or not name:raise ValueError(f'Fila {row_number}: SKU y nombre son obligatorios ({name or sku})')
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,45}',sku):raise ValueError('Formato de SKU no admitido: '+sku)
         if sku in seen:raise ValueError('SKU duplicado: '+sku)
