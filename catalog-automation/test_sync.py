@@ -13,6 +13,45 @@ class SyncTests(unittest.TestCase):
     def test_duplicate_missing_empty_and_nonfinite_block(self):
         for rows in ([row(),row()],[row(SKU='')],[],[row(precio_detal='nan')]):
             with self.subTest(rows=rows),self.assertRaises(ValueError):sync.products_from_csv(source(rows))
+    def test_configured_sku_is_skipped_even_when_category_is_empty(self):
+        products=sync.products_from_csv(source([
+            row(SKU='SKU-00239',categoria=''),
+            row(SKU='SKU-00002',nombre='Producto que sí va')
+        ]))
+        self.assertEqual([p['sku'] for p in products],['SKU-00002'])
+    def test_missing_category_inherits_previous_product_category(self):
+        products=sync.products_from_csv(source([
+            row(SKU='SKU-00001',nombre='Producto anterior',categoria='Labios'),
+            row(SKU='SKU-00002',nombre='Producto sin categoria',categoria=''),
+            row(SKU='SKU-00003',nombre='Producto siguiente',categoria='Rostro'),
+        ]))
+        self.assertEqual(products[0]['source_category'],'Labios')
+        self.assertEqual(products[1]['source_category'],'Labios')
+        self.assertEqual(products[1]['category'],'Labios')
+        self.assertEqual(products[2]['source_category'],'Rostro')
+
+    def test_first_product_cannot_inherit_missing_category(self):
+        with self.assertRaisesRegex(ValueError,'no existe una categoría anterior válida'):
+            sync.products_from_csv(source([row(SKU='SKU-00001',categoria='')]))
+
+    def test_missing_category_inherits_previous_final_catalog_category(self):
+        products=sync.products_from_csv(source([
+            row(SKU='SKU-00001',nombre='Producto de piel',categoria='Piel'),
+            row(SKU='SKU-00002',nombre='Producto sin categoria',categoria=''),
+        ]))
+        self.assertEqual(products[0]['category'],'Rostro')
+        self.assertEqual(products[1]['source_category'],'Rostro')
+        self.assertEqual(products[1]['category'],'Rostro')
+
+    def test_multiple_missing_categories_keep_last_valid_category(self):
+        products=sync.products_from_csv(source([
+            row(SKU='SKU-00001',nombre='Producto base',categoria='Labios'),
+            row(SKU='SKU-00002',nombre='Producto sin categoria A',categoria=''),
+            row(SKU='SKU-00003',nombre='Producto sin categoria B',categoria=''),
+            row(SKU='SKU-00004',nombre='Producto rostro',categoria='Rostro'),
+            row(SKU='SKU-00005',nombre='Producto sin categoria C',categoria=''),
+        ]))
+        self.assertEqual([p['source_category'] for p in products],['Labios','Labios','Labios','Rostro','Rostro'])
     def test_family_picture_only_same_category(self):
         url='https://drive.google.com/file/d/abc/view'
         p=sync.products_from_csv(source([row(imagen_url=url),row(SKU='SKU-00002'),row(SKU='SKU-00003',categoria='Labios')]))
