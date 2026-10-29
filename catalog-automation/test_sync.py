@@ -83,16 +83,30 @@ class SyncTests(unittest.TestCase):
             self.assertEqual(len({sku for item in product_pages for sku in item['skus']}),14)
             report=sync.verify(work,products)
             self.assertEqual(report['references'],14)
-    def test_publish_order_and_failure_keeps_manifest(self):
+    def test_landing_page_is_mobile_friendly_and_has_download_fallback(self):
+        page=(sync.ROOT/sync.DOWNLOAD_PAGE).read_text(encoding='utf-8')
+        self.assertIn('name="viewport"',page)
+        self.assertIn('href="/ByFly_Catalogo_Download.pdf"',page)
+        self.assertIn('download="ByFly_Catalogo.pdf"',page)
+        self.assertIn('href="/ByFly_Catalogo.pdf"',page)
+        self.assertIn('Guardar en Archivos',page)
+
+    def test_publish_order_headers_and_failure_keeps_manifest(self):
         class Client:
-            def __init__(self,fail=False):self.keys=[];self.metadata={};self.fail=fail
+            def __init__(self,fail=False):self.keys=[];self.metadata={};self.http={};self.sizes={};self.fail=fail
             def put_object(self,**kw):
                 if self.fail and kw['Key']==sync.PDF:raise RuntimeError('offline')
                 self.keys.append(kw['Key']);self.metadata[kw['Key']]=kw.get('Metadata',{})
-            def head_object(self,**kw):return {'Metadata':self.metadata[kw['Key']]}
+                self.http[kw['Key']]={'ContentDisposition':kw.get('ContentDisposition'),'ContentType':kw.get('ContentType')}
+                self.sizes[kw['Key']]=len(kw['Body'])
+            def head_object(self,**kw):return {'Metadata':self.metadata[kw['Key']],'ContentLength':self.sizes[kw['Key']],**self.http[kw['Key']]}
         with tempfile.TemporaryDirectory() as td:
             w=Path(td);(w/sync.PDF).write_bytes(b'verified-pdf');state={'fingerprint':'abc'}
-            c=Client();sync.publish(c,'bucket',w,state);self.assertEqual(c.keys,['versions/abc.pdf',sync.PDF,sync.STATE])
+            c=Client();sync.publish(c,'bucket',w,state)
+            self.assertEqual(c.keys,['versions/abc.pdf',sync.PDF,sync.DOWNLOAD_PDF,sync.DOWNLOAD_PAGE,sync.STATE])
+            self.assertTrue(c.http[sync.PDF]['ContentDisposition'].startswith('inline'))
+            self.assertTrue(c.http[sync.DOWNLOAD_PDF]['ContentDisposition'].startswith('attachment'))
+            self.assertEqual(c.http[sync.DOWNLOAD_PAGE]['ContentType'],'text/html; charset=utf-8')
             c=Client(True)
             with self.assertRaises(RuntimeError):sync.publish(c,'bucket',w,state)
             self.assertNotIn(sync.STATE,c.keys)
@@ -108,6 +122,15 @@ class SyncTests(unittest.TestCase):
         class Client:
             def head_object(self,**kw):raise Missing()
         self.assertFalse(sync.published_matches(Client(),'bucket',{}))
+    def test_missing_download_object_forces_republication(self):
+        class MissingDownload(Exception):
+            response={'Error':{'Code':'NoSuchKey'}}
+        class Client:
+            def head_object(self,**kw):
+                if kw['Key']==sync.DOWNLOAD_PDF:raise MissingDownload()
+                return {'ContentLength':100,'Metadata':{'sha256':'same'},'ContentDisposition':'inline'}
+        self.assertFalse(sync.published_matches(Client(),'bucket',{'pdf_sha256':'same'}))
+
     def test_retry_image_download(self):
         class Response:
             def __enter__(self):return self
