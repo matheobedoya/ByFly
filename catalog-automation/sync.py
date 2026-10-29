@@ -7,7 +7,7 @@ from PIL import Image,ImageOps
 from categories import category,norm
 ROOT=Path(__file__).resolve().parent
 DEFAULT_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQo4RhtucI4m_U32VCNzNy2E33wCeXeO2NKTcDOFn1mDupdXtPsqDEPF6NFJDYRc6LNWJJpRAZLguIt/pub?gid=1817499306&single=true&output=csv'
-STATE='actualizacion.json';PDF='ByFly_Catalogo.pdf'
+STATE='actualizacion.json';PDF='ByFly_Catalogo.pdf';DOWNLOAD_PDF='ByFly_Catalogo_Download.pdf';DOWNLOAD_PAGE='descargar.html'
 TRUE={'si','sí','yes','1','true','nuevo'}
 # SKU excluidos intencionalmente del catálogo hasta nueva revisión.
 SKIP_SKUS={'SKU-00239'}
@@ -170,17 +170,48 @@ def read_state(client,bucket):
         raise
 
 def published_matches(client,bucket,state):
-    try:head=client.head_object(Bucket=bucket,Key=PDF)
-    except Exception as e:
-        if getattr(e,'response',{}).get('Error',{}).get('Code') in ('NoSuchKey','NotFound','404'):return False
-        raise
-    return head.get('ContentLength',0)>0 and head.get('Metadata',{}).get('sha256')==state.get('pdf_sha256')
+    expected=[
+        (PDF,state.get('pdf_sha256')),
+        (DOWNLOAD_PDF,state.get('pdf_sha256')),
+        (DOWNLOAD_PAGE,digest((ROOT/DOWNLOAD_PAGE).read_bytes())),
+    ]
+    for key,expected_hash in expected:
+        try:head=client.head_object(Bucket=bucket,Key=key)
+        except Exception as e:
+            if getattr(e,'response',{}).get('Error',{}).get('Code') in ('NoSuchKey','NotFound','404'):return False
+            raise
+        if head.get('ContentLength',0)<=0 or head.get('Metadata',{}).get('sha256')!=expected_hash:return False
+        if key==DOWNLOAD_PDF and not head.get('ContentDisposition','').lower().startswith('attachment'):
+            return False
+    return True
 
 def publish(client,bucket,work,state):
     raw=(work/PDF).read_bytes();version='versions/'+state['fingerprint']+'.pdf'
-    for key in (version,PDF):
-        client.put_object(Bucket=bucket,Key=key,Body=raw,ContentType='application/pdf',CacheControl='public,max-age=31536000,immutable' if key==version else 'no-cache,max-age=0,must-revalidate',Metadata={'sha256':digest(raw)})
-        if client.head_object(Bucket=bucket,Key=key)['Metadata'].get('sha256')!=digest(raw):raise RuntimeError('No se verificó la publicación')
+    page_path=ROOT/DOWNLOAD_PAGE
+    if not page_path.is_file():
+        raise FileNotFoundError(f'Falta la página de descarga: {page_path}')
+    page=page_path.read_bytes()
+    if b'ByFly_Catalogo_Download.pdf' not in page or b'ByFly_Catalogo.pdf' not in page:
+        raise ValueError('La página de descarga no contiene los enlaces esperados')
+    objects=[
+        (version,raw,'application/pdf','inline; filename=\"ByFly_Catalogo.pdf\"','public,max-age=31536000,immutable'),
+        # Publicación estable para visualizar el PDF dentro del navegador.
+        (PDF,raw,'application/pdf','inline; filename=\"ByFly_Catalogo.pdf\"','public,max-age=300'),
+        # Objeto gemelo con Content-Disposition attachment para priorizar la descarga en Safari/iOS.
+        (DOWNLOAD_PDF,raw,'application/pdf','attachment; filename=\"ByFly_Catalogo.pdf\"','public,max-age=300'),
+        (DOWNLOAD_PAGE,page,'text/html; charset=utf-8','inline; filename=\"descargar.html\"','public,max-age=300'),
+    ]
+    for key,body,content_type,content_disposition,cache_control in objects:
+        client.put_object(
+            Bucket=bucket,Key=key,Body=body,ContentType=content_type,
+            ContentDisposition=content_disposition,CacheControl=cache_control,
+            Metadata={'sha256':digest(body)},
+        )
+        head=client.head_object(Bucket=bucket,Key=key)
+        if head.get('Metadata',{}).get('sha256')!=digest(body) or head.get('ContentLength',len(body))!=len(body):
+            raise RuntimeError('No se verificó la publicación de '+key)
+        if head.get('ContentDisposition') and head['ContentDisposition']!=content_disposition:
+            raise RuntimeError('No se verificó Content-Disposition para '+key)
     # Commit the manifest last: failed builds never replace it.
     client.put_object(Bucket=bucket,Key=STATE,Body=encoded(state),ContentType='application/json',CacheControl='no-store')
 
@@ -194,7 +225,7 @@ def main():
     print(f'Referencias válidas: {len(products)}',flush=True)
     ids,photos=inspect_photos(products,work)
     # Includes code/assets: a layout correction also triggers regeneration.
-    code_hash=digest(b''.join(p.read_bytes() for p in sorted(ROOT.rglob('*')) if p.is_file() and (p.suffix in ('.py','.ttf','.png','.txt')) and 'work' not in p.parts and '__pycache__' not in p.parts))
+    code_hash=digest(b''.join(p.read_bytes() for p in sorted(ROOT.rglob('*')) if p.is_file() and (p.suffix in ('.py','.ttf','.png','.txt','.html')) and 'work' not in p.parts and '__pycache__' not in p.parts))
     fingerprint=digest(encoded({'products':products,'images':photos,'generator':code_hash}))
     if fingerprint==previous.get('fingerprint') and not args.force and published_matches(client,bucket,previous):
         print('Sin cambios: se conserva el PDF publicado.');return
