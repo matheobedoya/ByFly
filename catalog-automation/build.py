@@ -62,7 +62,7 @@ class Edition(Catalog):
    source=Image.open(path)
    # PDF transport encoding only: preserve native dimensions and content.
    if source.mode not in ('RGB','L'):source=source.convert('RGB')
-   buf=io.BytesIO();source.thumbnail((1400,1400),Image.Resampling.LANCZOS);source.save(buf,format='JPEG',quality=90,optimize=True,subsampling=2);buf.seek(0)
+   buf=io.BytesIO();source.thumbnail((1100,1100),Image.Resampling.LANCZOS);source.save(buf,format='JPEG',quality=82,optimize=True,subsampling=2);buf.seek(0)
    reader=ImageReader(buf);self.reader_cache[path]=(reader,source.size)
   reader,(iw,ih)=self.reader_cache[path];scale=min(w/iw,h/ih);dw,dh=iw*scale,ih*scale
   self.c.drawImage(reader,x+(w-dw)/2,y+(h-dh)/2,dw,dh,mask='auto')
@@ -283,3 +283,4 @@ if __name__=='__main__':
  c=Edition(SOURCE/'ByFly_Catalogo.pdf');c.build()
  (SOURCE/'layout.json').write_text(json.dumps(c.qa,ensure_ascii=False))
  print(json.dumps({'pages':c.page,'references':len(P),'bytes':(SOURCE/'ByFly_Catalogo.pdf').stat().st_size}))
+.st_size}))
