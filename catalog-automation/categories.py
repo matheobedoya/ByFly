@@ -43,3 +43,4 @@ def product_order(p):
  rank=next((i for i,t in enumerate(terms) if t in n),len(terms))
  tone_key=tuple((0,int(t)) if t.isdigit() else (1,t) for t in re.split(r'(\d+)',norm(p['tone'])) if t)
  return rank,n,norm(p['brand']),tone_key,p['sku']
+
