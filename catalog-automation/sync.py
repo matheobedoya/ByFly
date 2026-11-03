@@ -241,3 +241,4 @@ def main():
         w=csv.DictWriter(f,fieldnames=fields,extrasaction='ignore');w.writeheader();w.writerows(products)
     print(json.dumps(report,ensure_ascii=False));print('Validado localmente.' if local else 'Publicado y verificado en R2.')
 if __name__=='__main__':main()
+
