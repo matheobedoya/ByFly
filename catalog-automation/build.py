@@ -283,4 +283,3 @@ if __name__=='__main__':
  c=Edition(SOURCE/'ByFly_Catalogo.pdf');c.build()
  (SOURCE/'layout.json').write_text(json.dumps(c.qa,ensure_ascii=False))
  print(json.dumps({'pages':c.page,'references':len(P),'bytes':(SOURCE/'ByFly_Catalogo.pdf').stat().st_size}))
-.st_size}))
