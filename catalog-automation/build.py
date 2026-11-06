@@ -12,6 +12,9 @@ rl_config.useA85=False
 from reportlab.lib.colors import HexColor
 from reportlab.pdfbase import pdfmetrics
 R=Path(__file__).resolve().parent
+FRAME_STROKE='#E6C6D1'
+FRAME_SHADOW='#F1E8EB'
+NEWS_LIMIT=6
 SOURCE=Path(__import__('os').environ.get('CATALOG_WORKDIR',str(R/'work'))) 
 P=json.loads((SOURCE/'products.json').read_text());PH={x['id']:x['path'] for x in json.loads((SOURCE/'photo-quality.json').read_text())}
 ORDER=['Combos','Rostro','Preparación y fijación','Ojos y cejas','Labios','Skincare','Brochas y esponjas','Cuidado corporal','Cabello','Uñas','Accesorios']
@@ -20,7 +23,13 @@ _families=collections.OrderedDict()
 for p in sorted(P,key=lambda x:(ORDER.index(x['category']),product_order(x))):
  _families.setdefault((p['category'],p['name'].upper(),p['brand'].upper()),[]).append(p)
 source_order={p['sku']:i for i,p in enumerate(P)}
-F=[];_new_families=[]
+def addition_order(product):
+ # ByFly utiliza SKU consecutivos; el número es más estable que el orden
+ # visual de la hoja si alguien ordena o filtra sus filas. Si no hay sufijo
+ # numérico, se usa la posición original de la fila como respaldo.
+ match=__import__('re').search(r'(\d+)$',product['sku'])
+ return int(match.group(1)) if match else source_order[product['sku']]
+F=[];_recent_families=[]
 for family in _families.values():
  chunks=[family[i:i+6] for i in range(0,len(family),6)]
  for part_index,chunk in enumerate(chunks):
@@ -29,11 +38,13 @@ for family in _families.values():
    q['_family_parts']=len(chunks)
    q['_family_continuation']=part_index>0
   F.append(chunk)
- if any(q['new'] for q in family):
-  last_new=max(source_order[q['sku']] for q in family if q['new'])
-  # Una familia aparece una sola vez en Novedades, aunque sus SKU ocupen varias fichas.
-  _new_families.append((last_new,chunks[0]))
-NEW=[group for _,group in sorted(_new_families,key=lambda item:item[0],reverse=True)]
+ # La hoja se procesa respetando el orden de sus filas. Las últimas familias
+ # añadidas al final de la hoja se muestran primero en Novedades, incluso si
+ # la columna "Nuevo" no está marcada.
+ last_added=max(addition_order(q) for q in family)
+ _recent_families.append((last_added,family))
+NEW=[family for _,family in sorted(_recent_families,key=lambda item:item[0],reverse=True)[:NEWS_LIMIT]]
+NEWS_SKUS={q['sku'] for family in NEW for q in family}
 class Edition(Catalog):
  def __init__(self,path):
   self.desktop=False;self.w,self.h=(560,700)
@@ -58,14 +69,34 @@ class Edition(Catalog):
   self.c.showPage()
  def img(self,path,x,y,w,h,cover=False,r=0):
   if not path:return
+  # Marco uniforme para todas las fotografías: sombra muy suave, fondo blanco,
+  # borde rosa empolvado y esquinas redondeadas. La foto se mantiene en modo
+  # contain (sin recorte ni deformación) y con margen interior.
+  self.c.saveState()
+  radius=min(11,max(2,min(w,h)*0.09))
+  self.c.setFillColor(HexColor(FRAME_SHADOW))
+  self.c.roundRect(x+1.4,y-1.4,w,h,radius,fill=1,stroke=0)
+  self.c.setFillColor(HexColor('#FFFFFF'))
+  self.c.setStrokeColor(HexColor(FRAME_STROKE))
+  self.c.setLineWidth(0.85)
+  self.c.roundRect(x,y,w,h,radius,fill=1,stroke=1)
+  pad=min(5,max(1.5,min(w,h)*0.045))
+  ix,iy,iw,ih=x+pad,y+pad,w-2*pad,h-2*pad
+  if iw<=0 or ih<=0:
+   self.c.restoreState();return
   if path not in self.reader_cache:
    source=Image.open(path)
-   # PDF transport encoding only: preserve native dimensions and content.
+   # Mobile-friendly PDF: 1200 px is sufficient for the 560 pt page layout,
+   # while quality 82 noticeably reduces transfer size on slower mobile networks.
    if source.mode not in ('RGB','L'):source=source.convert('RGB')
-   buf=io.BytesIO();source.thumbnail((1100,1100),Image.Resampling.LANCZOS);source.save(buf,format='JPEG',quality=82,optimize=True,subsampling=2);buf.seek(0)
+   buf=io.BytesIO();source.thumbnail((1200,1200),Image.Resampling.LANCZOS);source.save(buf,format='JPEG',quality=82,optimize=True,subsampling=2);buf.seek(0)
    reader=ImageReader(buf);self.reader_cache[path]=(reader,source.size)
-  reader,(iw,ih)=self.reader_cache[path];scale=min(w/iw,h/ih);dw,dh=iw*scale,ih*scale
-  self.c.drawImage(reader,x+(w-dw)/2,y+(h-dh)/2,dw,dh,mask='auto')
+  reader,(iw0,ih0)=self.reader_cache[path];scale=min(iw/iw0,ih/ih0);dw,dh=iw0*scale,ih0*scale
+  draw_x,draw_y=ix+(iw-dw)/2,iy+(ih-dh)/2
+  clip=self.c.beginPath();clip.roundRect(ix,iy,iw,ih,max(1,radius-pad))
+  self.c.clipPath(clip,stroke=0)
+  self.c.drawImage(reader,draw_x,draw_y,dw,dh,mask='auto')
+  self.c.restoreState()
  def brand(self,x,y,w=116):
   # Native PDF colorization: keep the official PNG alpha mask unchanged.
   path=str(ASSETS/'logo-pdf.png');self.c.drawImage(path,x,y,w,w*1776/4858,mask='auto')
@@ -102,7 +133,7 @@ class Edition(Catalog):
   self.footer()
  def news(self):
   for block in range(self.newpages):
-   self.start('news' if block==0 else f'news{block}', 'Novedades' if block==0 else None);self.head('Novedades',f'Selección marcada como nueva en la hoja · {block+1}/{self.newpages}')
+   self.start('news' if block==0 else f'news{block}', 'Novedades' if block==0 else None);self.head('Novedades',f'Los productos añadidos más recientemente · {block+1}/{self.newpages}')
    self.text(28,self.h-126,'Lo nuevo, para ti.',30,'Karma-Medium',DARK)
    count=len(NEW[block*6:(block+1)*6]);
    if not count:
@@ -209,7 +240,7 @@ class Edition(Catalog):
   else:x,top,tw=28,h-85,w-56
   self.text(x,top,p['brand'] or 'BYFLY MAKEUP',10,'Arsenal-Bold',DARK)
   tags=[]
-  if any(q['new'] for q in f):tags.append('NOVEDAD')
+  if any(q['new'] or q['sku'] in NEWS_SKUS for q in f):tags.append('NOVEDAD')
   if p['imported']:tags.append('IMPORTADO')
   if tags:self.text(w-28,h-76,' · '.join(tags),9,'Arsenal-Bold',DARK,'right')
   size=23 if self.desktop else 24
@@ -282,4 +313,8 @@ class Edition(Catalog):
 if __name__=='__main__':
  c=Edition(SOURCE/'ByFly_Catalogo.pdf');c.build()
  (SOURCE/'layout.json').write_text(json.dumps(c.qa,ensure_ascii=False))
- print(json.dumps({'pages':c.page,'references':len(P),'bytes':(SOURCE/'ByFly_Catalogo.pdf').stat().st_size}))
+ news_payload=[{'sku':family[0]['sku'],'name':family[0]['name'],'brand':family[0]['brand'],
+                'last_added_sku':max(family,key=addition_order)['sku'],
+                'skus':[q['sku'] for q in family]} for family in NEW]
+ (SOURCE/'news.json').write_text(json.dumps(news_payload,ensure_ascii=False))
+ print(json.dumps({'pages':c.page,'references':len(P),'news_families':len(NEW),'latest_news_skus':[x['last_added_sku'] for x in news_payload], 'bytes':(SOURCE/'ByFly_Catalogo.pdf').stat().st_size}))
