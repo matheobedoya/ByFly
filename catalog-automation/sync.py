@@ -139,6 +139,10 @@ def verify(work,products):
                     if x<0 or y<0 or x2>560.5 or y2>700.5:raise ValueError('Texto fuera de página '+str(i+1)+': '+span['text'])
         for link in page.get_links():
             if link['kind']==fitz.LINK_GOTO and not 0<=link['page']<len(d):raise ValueError('Enlace interno roto')
+            if link['kind']==fitz.LINK_NAMED:
+                try:target=int(link.get('page'))-1
+                except (TypeError,ValueError):raise ValueError('Destino interno con nombre inválido')
+                if not 0<=target<len(d):raise ValueError('Destino nombrado fuera del PDF')
             if 'wa.me' in link.get('uri',''):wa.append(i+1)
     bysku={p['sku']:p for p in products}
     for row in qa:
@@ -151,8 +155,30 @@ def verify(work,products):
                 if price not in text:raise ValueError('Precio no coincide: '+sku)
     if len(found)!=len(products) or set(found)!=set(bysku) or len(found)!=len(set(found)):raise ValueError('Cobertura de referencias inválida')
     contact_page=len(d)
-    if wa.count(contact_page)!=1 or 'NOVEDADES' not in d[1].get_text():raise ValueError('Novedades o enlace WhatsApp en contacto inválido')
-    report={'references':len(found),'pages':len(d),'missing_image_families':len({(p['category'],p['name'],p['brand']) for p in products if not p['family_images']}),'whatsapp_pages':wa,'bytes':(work/PDF).stat().st_size}
+    if wa.count(contact_page)!=1 or 'NOVEDADES' not in d[1].get_text().upper():raise ValueError('Novedades o enlace WhatsApp en contacto inválido')
+    news_path=work/'news.json'
+    if not news_path.is_file():raise ValueError('Falta el registro de Novedades generado')
+    news_items=json.loads(news_path.read_text(encoding='utf-8'))
+    if not news_items:raise ValueError('La sección Novedades no puede quedar vacía')
+    if len(news_items)>6:raise ValueError('Novedades debe limitarse a seis familias recientes por edición')
+    if not any(link.get('kind') in (fitz.LINK_GOTO,fitz.LINK_NAMED) for link in d[1].get_links()):raise ValueError('La sección Novedades no tiene enlaces a fichas de producto')
+    # Cada ficha que declara una foto debe contener el trazo de marco rosa aplicado por build.py.
+    frame_rgb=(230/255,198/255,209/255)
+    for row in qa:
+        if row.get('images_drawn',0):
+            framed=False
+            for drawing in d[row['page']-1].get_drawings():
+                color=drawing.get('color')
+                if color and all(abs(color[i]-frame_rgb[i])<0.02 for i in range(3)):
+                    framed=True;break
+            if not framed:raise ValueError('Fotografía sin marco en página '+str(row['page']))
+    photo_frames_total=0
+    for page in d:
+        for drawing in page.get_drawings():
+            color=drawing.get('color')
+            if color and all(abs(color[i]-frame_rgb[i])<0.02 for i in range(3)):
+                photo_frames_total+=1
+    report={'references':len(found),'pages':len(d),'news_families':len(news_items),'latest_news_skus':[x['last_added_sku'] for x in news_items],'framed_photo_pages':sum(1 for x in qa if x.get('images_drawn',0)),'photo_frames_total':photo_frames_total,'missing_image_families':len({(p['category'],p['name'],p['brand']) for p in products if not p['family_images']}),'whatsapp_pages':wa,'bytes':(work/PDF).stat().st_size}
     (work/'verification.json').write_bytes(encoded(report));return report
 
 def s3_client():
@@ -170,50 +196,60 @@ def read_state(client,bucket):
         raise
 
 def published_matches(client,bucket,state):
-    expected=[
-        (PDF,state.get('pdf_sha256')),
-        (DOWNLOAD_PDF,state.get('pdf_sha256')),
-        (DOWNLOAD_PAGE,digest((ROOT/DOWNLOAD_PAGE).read_bytes())),
-    ]
+    expected_pdf=state.get('pdf_sha256')
+    expected_page=digest((ROOT/DOWNLOAD_PAGE).read_bytes())
+    if not expected_pdf:return False
+    expected=[(PDF,expected_pdf),(DOWNLOAD_PDF,expected_pdf),(DOWNLOAD_PAGE,expected_page)]
     for key,expected_hash in expected:
         try:head=client.head_object(Bucket=bucket,Key=key)
         except Exception as e:
             if getattr(e,'response',{}).get('Error',{}).get('Code') in ('NoSuchKey','NotFound','404'):return False
             raise
         if head.get('ContentLength',0)<=0 or head.get('Metadata',{}).get('sha256')!=expected_hash:return False
-        if key==DOWNLOAD_PDF and not head.get('ContentDisposition','').lower().startswith('attachment'):
-            return False
+        disposition=(head.get('ContentDisposition') or '').lower()
+        if key==PDF and not disposition.startswith('inline'):return False
+        if key==DOWNLOAD_PDF and not disposition.startswith('attachment'):return False
+        if key==DOWNLOAD_PAGE and head.get('ContentType','').split(';')[0]!='text/html':return False
     return True
 
-def publish(client,bucket,work,state):
-    raw=(work/PDF).read_bytes();version='versions/'+state['fingerprint']+'.pdf'
+def publish(client,bucket,work,state,pdf_raw=None):
+    # Solo se publican los bytes del PDF recién generado y ya validado.
+    pdf_path=work/PDF
+    raw=pdf_raw if pdf_raw is not None else pdf_path.read_bytes()
+    if not raw.startswith(b'%PDF-'):
+        raise ValueError('El archivo generado no tiene cabecera PDF válida')
+    import fitz
+    doc=fitz.open(stream=raw,filetype='pdf')
+    if doc.is_encrypted or len(doc)<2:
+        raise ValueError('El PDF generado está cifrado o no contiene las páginas esperadas')
+    pdf_hash=digest(raw)
+    state.update({'pdf_sha256':pdf_hash,'references':state.get('references',0),
+                  'pages':len(doc),'bytes':len(raw),'master_pdf':'generated-from-current-sheet'})
+    version='versions/'+state['fingerprint']+'.pdf'
     page_path=ROOT/DOWNLOAD_PAGE
     if not page_path.is_file():
         raise FileNotFoundError(f'Falta la página de descarga: {page_path}')
     page=page_path.read_bytes()
     if b'ByFly_Catalogo_Download.pdf' not in page or b'ByFly_Catalogo.pdf' not in page:
-        raise ValueError('La página de descarga no contiene los enlaces esperados')
+        raise ValueError('La página de descarga debe incluir vista previa y descarga del mismo PDF')
     objects=[
-        (version,raw,'application/pdf','inline; filename=\"ByFly_Catalogo.pdf\"','public,max-age=31536000,immutable'),
-        # Publicación estable para visualizar el PDF dentro del navegador.
-        (PDF,raw,'application/pdf','inline; filename=\"ByFly_Catalogo.pdf\"','public,max-age=300'),
-        # Objeto gemelo con Content-Disposition attachment para priorizar la descarga en Safari/iOS.
-        (DOWNLOAD_PDF,raw,'application/pdf','attachment; filename=\"ByFly_Catalogo.pdf\"','public,max-age=300'),
-        (DOWNLOAD_PAGE,page,'text/html; charset=utf-8','inline; filename=\"descargar.html\"','public,max-age=300'),
+        (version,raw,'application/pdf','inline; filename="ByFly_Catalogo.pdf"','public,max-age=31536000,immutable'),
+        (PDF,raw,'application/pdf','inline; filename="ByFly_Catalogo.pdf"','public,max-age=300'),
+        (DOWNLOAD_PDF,raw,'application/pdf','attachment; filename="ByFly_Catalogo.pdf"','public,max-age=300'),
+        (DOWNLOAD_PAGE,page,'text/html; charset=utf-8','inline; filename="descargar.html"','public,max-age=300'),
     ]
     for key,body,content_type,content_disposition,cache_control in objects:
-        client.put_object(
-            Bucket=bucket,Key=key,Body=body,ContentType=content_type,
+        client.put_object(Bucket=bucket,Key=key,Body=body,ContentType=content_type,
             ContentDisposition=content_disposition,CacheControl=cache_control,
-            Metadata={'sha256':digest(body)},
-        )
+            Metadata={'sha256':digest(body)})
         head=client.head_object(Bucket=bucket,Key=key)
         if head.get('Metadata',{}).get('sha256')!=digest(body) or head.get('ContentLength',len(body))!=len(body):
             raise RuntimeError('No se verificó la publicación de '+key)
         if head.get('ContentDisposition') and head['ContentDisposition']!=content_disposition:
             raise RuntimeError('No se verificó Content-Disposition para '+key)
-    # Commit the manifest last: failed builds never replace it.
+    # El manifiesto se actualiza al final: un fallo conserva la última publicación válida.
     client.put_object(Bucket=bucket,Key=STATE,Body=encoded(state),ContentType='application/json',CacheControl='no-store')
+    return {'references':state['references'],'pages':state['pages'],'bytes':state['bytes'],'pdf_sha256':pdf_hash}
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--local-csv');parser.add_argument('--force',action='store_true');parser.add_argument('--workdir',default=str(ROOT/'work'));args=parser.parse_args()
@@ -233,7 +269,11 @@ def main():
     subprocess.run([sys.executable,str(ROOT/'build.py')],env={**os.environ,'CATALOG_WORKDIR':str(work)},check=True)
     report=verify(work,products)
     state={**report,'fingerprint':fingerprint,'updated_at':datetime.now(timezone.utc).isoformat(),'pdf':PDF,'version':'versions/'+fingerprint+'.pdf','pdf_sha256':digest((work/PDF).read_bytes())}
-    if not local:publish(client,bucket,work,state)
+    pdf_raw=(work/PDF).read_bytes()
+    if not local:
+        published_report=publish(client,bucket,work,state,pdf_raw)
+        report.update(published_report)
+    state['pdf_sha256']=digest(pdf_raw);state['pages']=report['pages'];state['bytes']=len(pdf_raw)
     (work/STATE).write_bytes(encoded(state))
     # Export only public columns for manual classification/photo review.
     fields=['sku','name','brand','tone','source_category','category','category_reason','new','retail','wholesale','stock','available']
@@ -241,4 +281,3 @@ def main():
         w=csv.DictWriter(f,fieldnames=fields,extrasaction='ignore');w.writeheader();w.writerows(products)
     print(json.dumps(report,ensure_ascii=False));print('Validado localmente.' if local else 'Publicado y verificado en R2.')
 if __name__=='__main__':main()
-
