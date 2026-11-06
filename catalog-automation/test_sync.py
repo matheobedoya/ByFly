@@ -2,29 +2,11 @@ import csv,io,json,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
 import sync
+FRAME_HEX='#E6C6D1'
 HEADERS=['SKU','nombre','marca','categoria','precio_detal','precio_mayor','stock','disponible','imagen_url','Nuevo']
 def source(rows):
     f=io.StringIO();w=csv.DictWriter(f,fieldnames=HEADERS);w.writeheader();w.writerows(rows);return f.getvalue().encode()
 def row(**kw):return dict(SKU='SKU-00001',nombre='BASE',marca='TEST',categoria='Piel',precio_detal='44.000',precio_mayor='36000',stock='2',disponible='si',imagen_url='',Nuevo='',**kw) if not kw else {**row(),**kw}
-
-def run_build_with_diagnostics(work):
-    """Run the PDF builder and expose the real error when a test fails."""
-    import os, subprocess, sys
-    result = subprocess.run(
-        [sys.executable, str(sync.ROOT / 'build.py')],
-        env={**os.environ, 'CATALOG_WORKDIR': str(work)},
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode:
-        raise AssertionError(
-            'build.py falló durante la prueba.'
-            f"\nCódigo de salida: {result.returncode}"
-            f"\n--- STDOUT ---\n{result.stdout or '(vacío)'}"
-            f"\n--- STDERR ---\n{result.stderr or '(vacío)'}"
-        )
-    return result
-
 class SyncTests(unittest.TestCase):
     def test_parse_prices_new_and_stock(self):
         p=sync.products_from_csv(source([row(stock='0',Nuevo='Nuevo')]))[0]
@@ -75,13 +57,28 @@ class SyncTests(unittest.TestCase):
         url='https://drive.google.com/file/d/abc/view'
         p=sync.products_from_csv(source([row(imagen_url=url),row(SKU='SKU-00002'),row(SKU='SKU-00003',categoria='Labios')]))
         self.assertEqual(p[1]['family_images'],['abc']);self.assertEqual(p[2]['family_images'],[])
-    def test_verify_empty_news_and_large_family(self):
+    def test_verify_news_and_large_family(self):
         import os,subprocess,sys
         with tempfile.TemporaryDirectory() as td:
             work=Path(td);p=sync.products_from_csv(source([row(SKU=f'SKU-{i:05}') for i in range(1,15)]))
             (work/'products.json').write_bytes(sync.encoded(p));(work/'photo-quality.json').write_text('[]')
-            run_build_with_diagnostics(work)
+            subprocess.run([sys.executable,str(sync.ROOT/'build.py')],env={**os.environ,'CATALOG_WORKDIR':td},check=True,capture_output=True)
             report=sync.verify(work,p);self.assertEqual(report['references'],14);self.assertEqual(report['pages'],9)
+    def test_latest_six_families_appear_in_news_without_new_flag(self):
+        import os,subprocess,sys
+        import fitz
+        with tempfile.TemporaryDirectory() as td:
+            work=Path(td)
+            rows=[row(SKU=f'SKU-{i:05}',nombre=f'Producto Reciente {i}',marca=f'MARCA-{i}',Nuevo='') for i in range(8,0,-1)]
+            products=sync.products_from_csv(source(rows))
+            (work/'products.json').write_bytes(sync.encoded(products));(work/'photo-quality.json').write_text('[]')
+            subprocess.run([sys.executable,str(sync.ROOT/'build.py')],env={**os.environ,'CATALOG_WORKDIR':td},check=True,capture_output=True)
+            news=json.loads((work/'news.json').read_text())
+            self.assertEqual([item['last_added_sku'] for item in news],['SKU-00008','SKU-00007','SKU-00006','SKU-00005','SKU-00004','SKU-00003'])
+            doc=fitz.open(work/sync.PDF);news_text=doc[1].get_text()
+            for i in range(3,9):self.assertIn(f'producto reciente {i}'.lower(),news_text.lower())
+            self.assertNotIn('Producto Reciente 1',news_text);self.assertNotIn('Producto Reciente 2',news_text)
+
     def test_large_family_continuations_do_not_repeat_photo(self):
         import os,subprocess,sys
         from PIL import Image
@@ -92,7 +89,7 @@ class SyncTests(unittest.TestCase):
             products=sync.products_from_csv(source(rows))
             (work/'products.json').write_bytes(sync.encoded(products))
             (work/'photo-quality.json').write_text(json.dumps([{'id':'abc','path':str(image_path),'width':80,'height':80}]))
-            run_build_with_diagnostics(work)
+            subprocess.run([sys.executable,str(sync.ROOT/'build.py')],env={**os.environ,'CATALOG_WORKDIR':td},check=True,capture_output=True)
             qa=json.loads((work/'layout.json').read_text())
             product_pages=[item for item in qa if 'skus' in item]
             self.assertEqual([len(item['skus']) for item in product_pages],[6,6,2])
@@ -102,32 +99,48 @@ class SyncTests(unittest.TestCase):
             self.assertEqual(len({sku for item in product_pages for sku in item['skus']}),14)
             report=sync.verify(work,products)
             self.assertEqual(report['references'],14)
+            import fitz
+            doc=fitz.open(work/sync.PDF)
+            page=doc[product_pages[0]['page']-1]
+            expected=tuple(int(FRAME_HEX[i:i+2],16)/255 for i in (1,3,5))
+            frame_drawings=[d for d in page.get_drawings() if d.get('color') and all(abs(d['color'][i]-expected[i])<0.015 for i in range(3))]
+            self.assertTrue(frame_drawings,'La fotografía debe tener un marco visible en el PDF')
     def test_landing_page_is_mobile_friendly_and_has_download_fallback(self):
         page=(sync.ROOT/sync.DOWNLOAD_PAGE).read_text(encoding='utf-8')
         self.assertIn('name="viewport"',page)
         self.assertIn('href="/ByFly_Catalogo_Download.pdf"',page)
         self.assertIn('download="ByFly_Catalogo.pdf"',page)
         self.assertIn('href="/ByFly_Catalogo.pdf"',page)
+        self.assertIn('Ver catálogo',page)
+        self.assertIn('Descargar PDF',page)
+        self.assertIn('Logotipo oficial de ByFly Makeup',page)
         self.assertIn('Guardar en Archivos',page)
+        self.assertIn('Mostrar vista previa',page)
 
-    def test_publish_order_headers_and_failure_keeps_manifest(self):
+    def test_publish_generated_pdf_bytes_to_both_stable_urls(self):
+        from reportlab.pdfgen import canvas
+        buf=io.BytesIO();pdf=canvas.Canvas(buf,pagesize=(560,700));pdf.drawString(40,650,'PDF generado y validado');pdf.showPage();pdf.drawString(40,650,'Segunda página');pdf.showPage();pdf.save();generated_pdf=buf.getvalue()
         class Client:
-            def __init__(self,fail=False):self.keys=[];self.metadata={};self.http={};self.sizes={};self.fail=fail
+            def __init__(self,fail=False):self.keys=[];self.metadata={};self.http={};self.sizes={};self.bodies={};self.fail=fail
             def put_object(self,**kw):
                 if self.fail and kw['Key']==sync.PDF:raise RuntimeError('offline')
                 self.keys.append(kw['Key']);self.metadata[kw['Key']]=kw.get('Metadata',{})
                 self.http[kw['Key']]={'ContentDisposition':kw.get('ContentDisposition'),'ContentType':kw.get('ContentType')}
-                self.sizes[kw['Key']]=len(kw['Body'])
+                self.sizes[kw['Key']]=len(kw['Body']);self.bodies[kw['Key']]=kw['Body']
             def head_object(self,**kw):return {'Metadata':self.metadata[kw['Key']],'ContentLength':self.sizes[kw['Key']],**self.http[kw['Key']]}
         with tempfile.TemporaryDirectory() as td:
-            w=Path(td);(w/sync.PDF).write_bytes(b'verified-pdf');state={'fingerprint':'abc'}
+            w=Path(td);(w/sync.PDF).write_bytes(generated_pdf)
+            state={'fingerprint':'abc','references':14}
             c=Client();sync.publish(c,'bucket',w,state)
             self.assertEqual(c.keys,['versions/abc.pdf',sync.PDF,sync.DOWNLOAD_PDF,sync.DOWNLOAD_PAGE,sync.STATE])
             self.assertTrue(c.http[sync.PDF]['ContentDisposition'].startswith('inline'))
             self.assertTrue(c.http[sync.DOWNLOAD_PDF]['ContentDisposition'].startswith('attachment'))
             self.assertEqual(c.http[sync.DOWNLOAD_PAGE]['ContentType'],'text/html; charset=utf-8')
+            self.assertEqual(c.bodies[sync.PDF],generated_pdf)
+            self.assertEqual(c.bodies[sync.DOWNLOAD_PDF],generated_pdf)
+            self.assertEqual(state['pdf_sha256'],sync.digest(generated_pdf))
             c=Client(True)
-            with self.assertRaises(RuntimeError):sync.publish(c,'bucket',w,state)
+            with self.assertRaises(RuntimeError):sync.publish(c,'bucket',w,{'fingerprint':'abc','references':14},generated_pdf)
             self.assertNotIn(sync.STATE,c.keys)
     def test_no_change_skips_render_and_upload(self):
         with tempfile.TemporaryDirectory() as td,patch('sys.argv',['sync','--workdir',td]),patch('sync.s3_client'),patch('sync.read_state',return_value={'references':1,'fingerprint':'constant'}),patch('sync.fetch',return_value=source([row()])),patch('sync.inspect_photos',return_value=([],{})),patch('sync.digest',return_value='constant'),patch('sync.download_photos') as download,patch('sync.published_matches',return_value=True),patch('sync.publish') as publish:
@@ -158,3 +171,4 @@ class SyncTests(unittest.TestCase):
         with patch('sync.urllib.request.urlopen',side_effect=[OSError(),Response()]),patch('sync.time.sleep'):
             self.assertEqual(sync.fetch('https://example.com'),b'ok')
 if __name__=='__main__':unittest.main()
+
