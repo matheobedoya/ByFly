@@ -108,6 +108,7 @@ export const CAT_ICONS: Record<string, string> = {
   Combos: "🎁",
   "Cuidado corporal": "🛁",
   Uñas: "💅",
+  Capilar: "💇‍♀️",
 }
 
 export const CATEGORIES = [
@@ -124,6 +125,7 @@ export const CATEGORIES = [
   { key: "Importados",         label: "🌍 Importados",       name: "Importados" },
   { key: "Cuidado corporal",   label: "🛁 Cuidado corporal", name: "Cuidado corporal" },
   { key: "Uñas",               label: "💅 Uñas",             name: "Uñas" },
+  { key: "Capilar",            label: "💇‍♀️ Capilar",          name: "Capilar" },
 ].filter((c) => MOSTRAR_IMPORTADOS || c.key !== "Importados")
 
 export const BADGE_STYLES: Record<string, { bg: string; text: string }> = {
