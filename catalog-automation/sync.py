@@ -5,12 +5,17 @@ from datetime import datetime,timezone
 from pathlib import Path
 from PIL import Image,ImageOps
 from categories import category,norm
+import pdf_guard
 ROOT=Path(__file__).resolve().parent
 DEFAULT_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQo4RhtucI4m_U32VCNzNy2E33wCeXeO2NKTcDOFn1mDupdXtPsqDEPF6NFJDYRc6LNWJJpRAZLguIt/pub?gid=1817499306&single=true&output=csv'
 STATE='actualizacion.json';PDF='ByFly_Catalogo.pdf';DOWNLOAD_PDF='ByFly_Catalogo_Download.pdf';DOWNLOAD_PAGE='descargar.html'
 TRUE={'si','sí','yes','1','true','nuevo'}
 # SKU excluidos intencionalmente del catálogo hasta nueva revisión.
 SKIP_SKUS={'SKU-00239'}
+# Nombres con los que la hoja escribe categorías que el catálogo ya tiene.
+# "Capilar" (productos para el cabello) se clasifica como "Cabello". La categoría original de la hoja
+# se conserva en source_category (revision.csv). Para tener una sección propia, borra esta línea.
+CATEGORY_ALIASES={'CAPILAR':'Cabello','CAPILARES':'Cabello'}
 def digest(data):return hashlib.sha256(data).hexdigest()
 def encoded(value):return json.dumps(value,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()
 def fetch(url):
@@ -59,11 +64,12 @@ def products_from_csv(raw):
                 f'Categoría vacía: {sku}; se hereda la categoría anterior "{source_category}" (fila {row_number})',
                 flush=True,
             )
-        p={'sku':sku,'name':name,'brand':(r.get('marca') or '').strip(),'tone':(r.get('tono') or '').strip(),'category':source_category,'retail':numeric(r.get('precio_detal')),'wholesale':numeric(r.get('precio_mayor')),'stock':numeric(r.get('stock'))}
+        canonical_category=CATEGORY_ALIASES.get(source_category.upper(),source_category)
+        p={'sku':sku,'name':name,'brand':(r.get('marca') or '').strip(),'tone':(r.get('tono') or '').strip(),'category':canonical_category,'retail':numeric(r.get('precio_detal')),'wholesale':numeric(r.get('precio_mayor')),'stock':numeric(r.get('stock'))}
         p['available']=(r.get('disponible') or '').strip().lower() in TRUE and p['stock']>0
         badges=[b.strip().lower() for b in re.split('[,;|]',r.get('badge') or '')]
         p['new']=(r.get('Nuevo') or '').strip().lower() in TRUE or 'nuevo' in badges
-        p['badges']=badges;p['description']='';p['source_category']=p['category'];p['imported']=norm(p['category'])=='IMPORTADOS'
+        p['badges']=badges;p['description']='';p['source_category']=source_category;p['imported']=norm(p['category'])=='IMPORTADOS'
         if norm(p['category'])=='CUIDADO CORPORAL':p['category']='Cuidado corporal'
         p['category'],p['category_reason']=category(p)
         # The next product with an empty source category inherits the previous
@@ -222,6 +228,8 @@ def publish(client,bucket,work,state,pdf_raw=None):
     doc=fitz.open(stream=raw,filetype='pdf')
     if doc.is_encrypted or len(doc)<2:
         raise ValueError('El PDF generado está cifrado o no contiene las páginas esperadas')
+    strict_problems,_=pdf_guard.inspect_bytes(raw)
+    if strict_problems:raise ValueError('El PDF no pasó la validación estricta y no se publicó: '+'; '.join(strict_problems))
     pdf_hash=digest(raw)
     state.update({'pdf_sha256':pdf_hash,'references':state.get('references',0),
                   'pages':len(doc),'bytes':len(raw),'master_pdf':'generated-from-current-sheet'})
@@ -267,7 +275,12 @@ def main():
         print('Sin cambios: se conserva el PDF publicado.');return
     download_photos(ids,work);(work/'products.json').write_bytes(encoded(products))
     subprocess.run([sys.executable,str(ROOT/'build.py')],env={**os.environ,'CATALOG_WORKDIR':str(work)},check=True)
+    # Validación estricta (qpdf): MuPDF perdona errores que Adobe y los visores móviles no. Si hace falta se repara
+    # (y se avisa en el registro); si no se puede dejar válido, se detiene y se conserva la publicación anterior.
+    guard=pdf_guard.finalize(work/PDF)
+    if guard['repaired']:print('AVISO: el generador produjo un PDF con errores de sintaxis y se reparó automáticamente. Revisa build.py.',flush=True)
     report=verify(work,products)
+    report['pdf_repaired']=guard['repaired'];(work/'verification.json').write_bytes(encoded(report))
     state={**report,'fingerprint':fingerprint,'updated_at':datetime.now(timezone.utc).isoformat(),'pdf':PDF,'version':'versions/'+fingerprint+'.pdf','pdf_sha256':digest((work/PDF).read_bytes())}
     pdf_raw=(work/PDF).read_bytes()
     if not local:

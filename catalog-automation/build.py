@@ -51,7 +51,10 @@ class Edition(Catalog):
   self.c=canvas.Canvas(str(path),pagesize=(self.w,self.h),pageCompression=1)
   self.c.setTitle('ByFly Makeup | Catálogo digital');self.c.setAuthor('ByFly Makeup')
   self.c.setViewerPreference('FitWindow','true')
-  self.c.setPageSize((self.w,self.h));self.c._doc.Catalog.PageLayout='SinglePage'
+  # setPageLayout() escribe /SinglePage como nombre PDF. Asignar el texto directamente
+  # (Catalog.PageLayout='SinglePage') genera "/PageLayout SinglePage", sin barra: MuPDF y poppler lo
+  # toleran, pero Adobe y varios visores móviles consideran el archivo dañado.
+  self.c.setPageSize((self.w,self.h));self.c._doc.Catalog.setPageLayout('SinglePage')
   self.page=0;self.products=P;self.photos=PH;self.groups=F;self.reader_cache={};self.qa=[];self.date=__import__('datetime').datetime.now(__import__('zoneinfo').ZoneInfo('America/Bogota')).strftime('%d/%m/%Y')
   self.newpages=max(1,math.ceil(len(NEW)/6));self.first=1+self.newpages+3+1
   self.starts={cat:next(i+self.first for i,f in enumerate(F) if f[0]['category']==cat) for cat in ORDER}

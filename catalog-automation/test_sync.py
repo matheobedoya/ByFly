@@ -170,5 +170,38 @@ class SyncTests(unittest.TestCase):
             def read(self):return b'ok'
         with patch('sync.urllib.request.urlopen',side_effect=[OSError(),Response()]),patch('sync.time.sleep'):
             self.assertEqual(sync.fetch('https://example.com'),b'ok')
-if __name__=='__main__':unittest.main()
+    def test_generated_pdf_passes_strict_validation(self):
+        # MuPDF y poppler toleran errores que Adobe y los visores móviles rechazan: se valida con qpdf.
+        import os,subprocess,sys
+        import pdf_guard
+        with tempfile.TemporaryDirectory() as td:
+            work=Path(td)
+            products=sync.products_from_csv(source([row(SKU=f'SKU-{i:05}',nombre=f'Producto {i}') for i in range(1,9)]))
+            (work/'products.json').write_bytes(sync.encoded(products));(work/'photo-quality.json').write_text('[]')
+            subprocess.run([sys.executable,str(sync.ROOT/'build.py')],env={**os.environ,'CATALOG_WORKDIR':td},check=True,capture_output=True)
+            problems,info=pdf_guard.inspect(str(work/sync.PDF))
+            self.assertEqual(problems,[]);self.assertGreater(info['pages'],1)
 
+    def test_publish_rejects_pdf_with_syntax_errors(self):
+        from reportlab.pdfgen import canvas
+        buf=io.BytesIO();c=canvas.Canvas(buf,pagesize=(560,700))
+        c._doc.Catalog.PageLayout='SinglePage'  # texto plano a propósito: genera "/PageLayout SinglePage" (sin barra)
+        c.drawString(40,650,'a');c.showPage();c.drawString(40,650,'b');c.showPage();c.save()
+        class Client:
+            def __init__(self):self.keys=[]
+            def put_object(self,**kw):self.keys.append(kw['Key'])
+        with tempfile.TemporaryDirectory() as td:
+            w=Path(td);(w/sync.PDF).write_bytes(buf.getvalue());client=Client()
+            with self.assertRaisesRegex(ValueError,'validación estricta'):sync.publish(client,'bucket',w,{'fingerprint':'abc','references':2})
+            self.assertEqual(client.keys,[])
+
+    def test_capilar_category_is_classified_as_cabello(self):
+        # Se espía categories.category() para que la prueba no dependa de las reglas internas de categories.py:
+        # lo que se comprueba es que "Capilar" llega ya traducido a "Cabello" y que la hoja original se conserva.
+        seen=[]
+        def spy(p):seen.append(p['category']);return p['category'],'prueba'
+        with patch.object(sync,'category',spy):
+            p=sync.products_from_csv(source([row(categoria='Capilar',nombre='SHAMPOO MIEL ROSADA')]))[0]
+        self.assertEqual(seen,['Cabello']);self.assertEqual(p['category'],'Cabello');self.assertEqual(p['source_category'],'Capilar')
+
+if __name__=='__main__':unittest.main()
