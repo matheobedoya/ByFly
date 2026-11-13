@@ -204,4 +204,14 @@ class SyncTests(unittest.TestCase):
             p=sync.products_from_csv(source([row(categoria='Capilar',nombre='SHAMPOO MIEL ROSADA')]))[0]
         self.assertEqual(seen,['Cabello']);self.assertEqual(p['category'],'Cabello');self.assertEqual(p['source_category'],'Capilar')
 
+    def test_placeholder_cells_do_not_stop_the_catalog(self):
+        # Caso real (12/11): SKU-00240 llegó con "-" en una celda numérica y detuvo todo el flujo.
+        rows=[row(SKU='SKU-00001'),row(SKU='SKU-00002',categoria='',precio_detal='-',precio_mayor='-',stock='-'),
+              row(SKU='SKU-00003',stock='-'),row(SKU='SKU-00004',precio_mayor='#VALUE!')]
+        products=sync.products_from_csv(source(rows))
+        self.assertEqual([p['sku'] for p in products],['SKU-00001','SKU-00003']);self.assertEqual(products[1]['stock'],0);self.assertFalse(products[1]['available'])
+        with self.assertRaisesRegex(ValueError,'sin precio válido'):
+            sync.products_from_csv(source([row(SKU='SKU-00001')]+[row(SKU=f'SKU-{i:05}',precio_detal='-') for i in range(2,9)]))
+        with self.assertRaises(ValueError):sync.products_from_csv(source([row(SKU='SKU-00001'),row(SKU='SKU-00002',precio_detal='abc')]))
+
 if __name__=='__main__':unittest.main()

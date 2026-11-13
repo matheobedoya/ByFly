@@ -26,6 +26,10 @@ def fetch(url):
         except Exception:
             if attempt==2:raise
             time.sleep(2**attempt)
+# Marcas que la hoja usa cuando una celda "no aplica" o se rompió una fórmula. No son números ni deben detener el catálogo.
+PLACEHOLDERS={'-','--','---','–','—','n/a','na','#n/a','#value!','#ref!','#div/0!','#error!'}
+MAX_SKIPPED_ROWS=5
+def is_placeholder(value):return str(value or '').strip().lower() in PLACEHOLDERS
 def numeric(value):
     s=str(value or '').strip().replace('$','').replace(' ','')
     if re.fullmatch(r'\d{1,3}(\.\d{3})+',s):s=s.replace('.','')
@@ -39,7 +43,7 @@ def products_from_csv(raw):
     reader=csv.DictReader(io.StringIO(raw.decode('utf-8-sig')))
     required={'SKU','nombre','categoria','precio_detal','precio_mayor','stock','disponible','imagen_url'}
     if not required<=set(reader.fieldnames or []):raise ValueError('Faltan columnas requeridas: '+', '.join(sorted(required-set(reader.fieldnames or []))))
-    products=[];seen=set();last_valid_source_category=None
+    products=[];seen=set();last_valid_source_category=None;skipped_rows=[]
     for row_number,r in enumerate(reader,2):
         if not any(str(v or '').strip() for v in r.values()):continue
         sku=(r.get('SKU') or '').strip();name=(r.get('nombre') or '').strip()
@@ -49,6 +53,11 @@ def products_from_csv(raw):
         if sku in SKIP_SKUS:
             print(f'SKU omitido por configuración: {sku}',flush=True)
             continue
+        # Un artículo sin precio (celdas con "-" o fórmulas rotas) no se puede vender: se omite y se avisa en el registro,
+        # en lugar de detener todo el catálogo por una fila. Si fueran muchas, algo se dañó en la hoja y sí se detiene.
+        if is_placeholder(r.get('precio_detal')) or is_placeholder(r.get('precio_mayor')):
+            print(f'AVISO: se omite {sku or name} (fila {row_number}) porque no tiene precio válido: precio_detal="{r.get("precio_detal")}", precio_mayor="{r.get("precio_mayor")}"',flush=True)
+            skipped_rows.append(sku or name);continue
         if not sku or not name:raise ValueError(f'Fila {row_number}: SKU y nombre son obligatorios ({name or sku})')
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,45}',sku):raise ValueError('Formato de SKU no admitido: '+sku)
         if sku in seen:raise ValueError('SKU duplicado: '+sku)
@@ -65,7 +74,7 @@ def products_from_csv(raw):
                 flush=True,
             )
         canonical_category=CATEGORY_ALIASES.get(source_category.upper(),source_category)
-        p={'sku':sku,'name':name,'brand':(r.get('marca') or '').strip(),'tone':(r.get('tono') or '').strip(),'category':canonical_category,'retail':numeric(r.get('precio_detal')),'wholesale':numeric(r.get('precio_mayor')),'stock':numeric(r.get('stock'))}
+        p={'sku':sku,'name':name,'brand':(r.get('marca') or '').strip(),'tone':(r.get('tono') or '').strip(),'category':canonical_category,'retail':numeric(r.get('precio_detal')),'wholesale':numeric(r.get('precio_mayor')),'stock':0.0 if is_placeholder(r.get('stock')) else numeric(r.get('stock'))}
         p['available']=(r.get('disponible') or '').strip().lower() in TRUE and p['stock']>0
         badges=[b.strip().lower() for b in re.split('[,;|]',r.get('badge') or '')]
         p['new']=(r.get('Nuevo') or '').strip().lower() in TRUE or 'nuevo' in badges
@@ -90,6 +99,7 @@ def products_from_csv(raw):
                 fid=url
             if fid not in p['image_ids']:p['image_ids'].append(fid)
         products.append(p)
+    if len(skipped_rows)>MAX_SKIPPED_ROWS:raise ValueError(f'{len(skipped_rows)} filas sin precio válido ({", ".join(skipped_rows[:8])}…): revisa la hoja antes de publicar')
     if not products:raise ValueError('Catálogo vacío: se conserva la publicación anterior')
     families={}
     for p in products:families.setdefault((p['category'],norm(p['name']),norm(p['brand'])),[]).append(p)
