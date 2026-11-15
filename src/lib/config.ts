@@ -1,6 +1,6 @@
-// — Sección Importados desactivada temporalmente — poner en true para reactivar —
-// Oculta la categoría "Importados" del filtro, del catálogo y del banner promocional.
-const MOSTRAR_IMPORTADOS = false
+// — Sección Importados — poner en false para ocultarla temporalmente —
+// Controla la categoría "Importados" en el filtro, el catálogo y el banner promocional.
+const MOSTRAR_IMPORTADOS = true
 
 export const CONFIG = {
   // — Contacto —
