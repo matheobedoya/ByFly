@@ -61,7 +61,7 @@ def merge_same_photo(families):
   family=[]
   for f in fams:
    for q in f:
-    rest=' '.join(q['name'].split()[n:]).strip();tone=(q.get('tone') or '').strip()
+    rest=label(' '.join(q['name'].split()[n:]).strip());tone=(q.get('tone') or '').strip()
     if rest and tone and rest.upper()!=tone.upper() and rest.upper() not in tone.upper():q['_tone']=rest+' · '+tone
     else:q['_tone']=tone or rest
     q['_display_name']=title
@@ -278,7 +278,7 @@ class Edition(Catalog):
    y=bottom-5
   if y<128:raise ValueError(f'Continuación de referencias invade CTA en página {self.page}: {y}')
   available=any(q['available'] for q in f)
-  self.button(34,88,472,42,'Consultar por WhatsApp' if available else 'Preguntar por disponibilidad',url=self.whatsapp(p,p['tone'] if len(f)==1 else None),dark=available)
+  self.button(34,88,472,42,'Consultar por WhatsApp' if available else 'Preguntar por disponibilidad',url=self.whatsapp({**p,'name':shown_name(p)},shown_tone(p,f) if len(f)==1 else None),dark=available)
   self.text(270,69,'Precio y disponibilidad sujetos a confirmación al hacer el pedido.',10,color=MUTED,align='center')
   self.qa.append({'page':self.page,'skus':[q['sku'] for q in f],'category':p['category'],'image':False,'images_drawn':0,'continuation':True,'family_part':part,'family_parts':parts,'lowest_y':y,'image_height':0})
   self.footer()
