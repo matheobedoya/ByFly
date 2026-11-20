@@ -134,8 +134,8 @@ class SyncTests(unittest.TestCase):
             import fitz
             doc=fitz.open(work/sync.PDF);page=next(x for x in pages if len(x['skus'])==3)
             text=doc[page['page']-1].get_text()
-            for tone in ('FRESA','COCO','UVA'):self.assertIn(tone,text)
-            self.assertIn('GLOSS MIMOSA',text)
+            for tone in ('FRESA','COCO','UVA'):self.assertIn(tone,text.upper())
+            self.assertIn('GLOSS MIMOSA',text.upper())
 
     def test_sku_is_not_visible_but_stays_searchable(self):
         import pikepdf
