@@ -289,8 +289,12 @@ def main():
     # (y se avisa en el registro); si no se puede dejar válido, se detiene y se conserva la publicación anterior.
     guard=pdf_guard.finalize(work/PDF)
     if guard['repaired']:print('AVISO: el generador produjo un PDF con errores de sintaxis y se reparó automáticamente. Revisa build.py.',flush=True)
+    # Vista web rápida: el visor del celular muestra la portada sin esperar a que bajen los ~30 MB. El contenido no
+    # cambia. Es opcional: si no se puede, se publica el PDF validado tal cual y solo se avisa.
+    linearized=pdf_guard.linearize(work/PDF)
+    if not linearized:print('AVISO: no se pudo activar la apertura rápida del PDF; se publica igual (válido).',flush=True)
     report=verify(work,products)
-    report['pdf_repaired']=guard['repaired'];(work/'verification.json').write_bytes(encoded(report))
+    report['pdf_repaired']=guard['repaired'];report['pdf_linearized']=linearized;(work/'verification.json').write_bytes(encoded(report))
     state={**report,'fingerprint':fingerprint,'updated_at':datetime.now(timezone.utc).isoformat(),'pdf':PDF,'version':'versions/'+fingerprint+'.pdf','pdf_sha256':digest((work/PDF).read_bytes())}
     pdf_raw=(work/PDF).read_bytes()
     if not local:

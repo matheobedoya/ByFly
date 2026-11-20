@@ -14,12 +14,14 @@ Uso en línea de comandos
 ------------------------
   python pdf_guard.py ARCHIVO.pdf          # valida; código de salida 1 si hay problemas
   python pdf_guard.py ARCHIVO.pdf --fix    # repara lo reparable (modifica el archivo) y revalida
+  python pdf_guard.py ARCHIVO.pdf --fast   # además lo deja "linealizado" (vista web rápida)
   python pdf_guard.py --public https://catalogo.byfly.com.co [--expect-sha256 HASH]
                                            # prueba lo que ve el público: ambos PDF y descargar.html
 
 Uso desde sync.py
 -----------------
   guard = pdf_guard.finalize(work / PDF)            # repara si hace falta; lanza PdfGuardError si no es seguro publicar
+  pdf_guard.linearize(work / PDF)                   # vista web rápida: el visor muestra la portada sin esperar los ~30 MB
   problems, _ = pdf_guard.inspect_bytes(pdf_bytes)  # validación sin tocar el archivo (se usa en publish)
 """
 import argparse
@@ -78,6 +80,7 @@ def inspect(path):
         # Avisos que qpdf emite al abrir (p. ej. "unknown token while reading object").
         open_warnings = list(pdf.get_warnings())
         info["pages"] = len(pdf.pages)
+        info["linearized"] = bool(getattr(pdf, "is_linearized", False))
         if pdf.is_encrypted:
             problems.append("el PDF está cifrado")
         if info["pages"] < 1:
@@ -167,6 +170,42 @@ def finalize(path):
     return info
 
 
+def linearize(path):
+    """Guarda el PDF "linealizado" (en Adobe: "Vista web rápida").
+
+    El contenido no cambia (mismas páginas, textos, fotos y enlaces); solo se reordena el archivo para que
+    la portada y las primeras páginas se puedan mostrar antes de terminar de bajar el PDF completo. Con un
+    catálogo de ~30 MB eso evita la pantalla en blanco en celulares con datos lentos.
+
+    Es una mejora opcional: si algo falla, el archivo original queda intacto y se devuelve False.
+    Devuelve True solo si el archivo quedó linealizado y pasa la validación estricta.
+    """
+    path = str(path)
+    try:
+        with pikepdf.open(path) as pdf:
+            if getattr(pdf, "is_linearized", False):
+                return True
+            pages = len(pdf.pages)
+    except Exception:  # noqa: BLE001
+        return False
+    fd, tmp = tempfile.mkstemp(suffix=".pdf", dir=os.path.dirname(os.path.abspath(path)))
+    os.close(fd)
+    try:
+        with pikepdf.open(path) as pdf:
+            pdf.save(tmp, linearize=True)
+        problems, info = inspect(tmp)
+        if problems or info.get("pages") != pages or not info.get("linearized"):
+            return False
+        os.replace(tmp, path)
+        tmp = None
+        return True
+    except Exception:  # noqa: BLE001 - nunca detener la publicación por esta mejora
+        return False
+    finally:
+        if tmp and os.path.exists(tmp):
+            os.remove(tmp)
+
+
 # ----------------------------------------------------------------- prueba pública
 def _get(url, headers=None):
     req = urllib.request.Request(url, headers={"User-Agent": "byfly-pdf-guard/1.0", **(headers or {})})
@@ -199,16 +238,22 @@ def check_public(base, expect_sha256=None):
         file_problems, info = inspect_bytes(body)
         problems += [f"[{label}] {p}" for p in file_problems]
         hashes[label] = hashlib.sha256(body).hexdigest()
-        print(f"[{label}] HTTP 200, {len(body):,} bytes, {info.get('pages', '?')} páginas, sha256 {hashes[label][:16]}…")
+        print(f"[{label}] HTTP 200, {len(body):,} bytes, {info.get('pages', '?')} páginas, "
+              f"{'apertura rápida' if info.get('linearized') else 'sin apertura rápida'}, sha256 {hashes[label][:16]}…")
     if len(set(hashes.values())) > 1:
         problems.append("los dos PDF públicos NO tienen los mismos bytes: " + str(hashes))
     if expect_sha256 and hashes and any(h != expect_sha256 for h in hashes.values()):
         # Aviso y no error: la caché pública (max-age=300) puede tardar hasta 5 minutos en mostrar la versión nueva.
         warnings.append("el enlace público aún no muestra el PDF recién publicado (esperado "
                         f"{expect_sha256[:16]}…); si persiste después de 5 minutos, revisa la caché de Cloudflare")
-    status, headers, body = _get(base + targets["ver"][0], {"Range": "bytes=0-1023"})
+    status, headers, first = _get(base + targets["ver"][0], {"Range": "bytes=0-1023"})
     if status != 206:
         warnings.append(f"el visor pidió Range y recibió HTTP {status} (no 206); algunos visores móviles lo necesitan")
+    # descargar.html añade ?v=<huella> a los enlaces para saltarse copias en caché. Debe entregar el mismo archivo.
+    status, headers, versioned = _get(base + targets["ver"][0] + "?v=pdfguard", {"Range": "bytes=0-1023"})
+    if status not in (200, 206) or versioned[:1024] != first[:1024]:
+        warnings.append(f"/ByFly_Catalogo.pdf?v=… respondió HTTP {status} o con otro contenido; la página seguirá "
+                        "usando los enlaces sin ?v= (funcionan igual)")
     status, _, body = _get(base + "/descargar.html")
     if status != 200:
         problems.append(f"descargar.html respondió HTTP {status}")
@@ -224,6 +269,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pdf", nargs="?", help="ruta del PDF a validar")
     ap.add_argument("--fix", action="store_true", help="reparar lo reparable (modifica el archivo)")
+    ap.add_argument("--fast", action="store_true", help="con --fix: dejarlo linealizado (vista web rápida)")
     ap.add_argument("--public", metavar="BASE_URL", help="probar los enlaces públicos, p. ej. https://catalogo.byfly.com.co")
     ap.add_argument("--expect-sha256", metavar="HASH", help="con --public: avisa si el enlace no muestra este PDF")
     args = ap.parse_args(argv)
@@ -243,8 +289,10 @@ def main(argv=None):
         except PdfGuardError as exc:
             print("ERROR:", exc)
             return 1
-        print(f"OK ({'reparado' if info['repaired'] else 'sin cambios'}): {info['pages']} páginas, "
-              f"{info['bytes']:,} bytes, sha256 {info['sha256']}")
+        fast = linearize(args.pdf) if args.fast else None
+        print(f"OK ({'reparado' if info['repaired'] else 'sin cambios'}"
+              f"{', apertura rápida' if fast else ''}): {info['pages']} páginas, "
+              f"{os.path.getsize(args.pdf):,} bytes, sha256 {sha256_file(args.pdf)}")
         return 0
     problems, info = inspect(args.pdf)
     for p in problems:

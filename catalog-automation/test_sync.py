@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 import sync
 FRAME_HEX='#E6C6D1'
-HEADERS=['SKU','nombre','marca','categoria','precio_detal','precio_mayor','stock','disponible','imagen_url','Nuevo']
+HEADERS=['SKU','nombre','marca','categoria','precio_detal','precio_mayor','stock','disponible','imagen_url','Nuevo','tono']
 def source(rows):
     f=io.StringIO();w=csv.DictWriter(f,fieldnames=HEADERS);w.writeheader();w.writerows(rows);return f.getvalue().encode()
 def row(**kw):return dict(SKU='SKU-00001',nombre='BASE',marca='TEST',categoria='Piel',precio_detal='44.000',precio_mayor='36000',stock='2',disponible='si',imagen_url='',Nuevo='',**kw) if not kw else {**row(),**kw}
@@ -105,6 +105,50 @@ class SyncTests(unittest.TestCase):
             expected=tuple(int(FRAME_HEX[i:i+2],16)/255 for i in (1,3,5))
             frame_drawings=[d for d in page.get_drawings() if d.get('color') and all(abs(d['color'][i]-expected[i])<0.015 for i in range(3))]
             self.assertTrue(frame_drawings,'La fotografía debe tener un marco visible en el PDF')
+    def _build_with_photos(self,td,rows,photo_ids):
+        import os,subprocess,sys
+        from PIL import Image
+        work=Path(td);photos=work/'photos';photos.mkdir()
+        quality=[]
+        for fid in photo_ids:
+            path=photos/(fid+'.jpg');Image.new('RGB',(80,80),(238,72,110)).save(path)
+            quality.append({'id':fid,'path':str(path),'width':80,'height':80})
+        products=sync.products_from_csv(source(rows))
+        (work/'products.json').write_bytes(sync.encoded(products));(work/'photo-quality.json').write_text(json.dumps(quality))
+        subprocess.run([sys.executable,str(sync.ROOT/'build.py')],env={**os.environ,'CATALOG_WORKDIR':td},check=True,capture_output=True)
+        return work,products,[item for item in json.loads((work/'layout.json').read_text()) if 'skus' in item]
+
+    def test_same_photo_different_names_become_one_page_of_tones(self):
+        # "GLOSS MIMOSA FRESA/COCO/UVA" con la misma foto = un producto en tres tonos: una sola ficha.
+        foto='https://drive.google.com/file/d/gloss/view'
+        rows=[row(SKU='SKU-00001',nombre='GLOSS MIMOSA FRESA',imagen_url=foto),row(SKU='SKU-00002',nombre='GLOSS MIMOSA COCO',imagen_url=foto),
+              row(SKU='SKU-00003',nombre='GLOSS MIMOSA UVA',imagen_url=foto),
+              # misma foto pero nombres sin palabras en común: NO se unen
+              row(SKU='SKU-00004',nombre='BROCHA KABUKI',imagen_url='https://drive.google.com/file/d/b/view'),
+              row(SKU='SKU-00005',nombre='ESPONJA GOTA',imagen_url='https://drive.google.com/file/d/b/view')]
+        with tempfile.TemporaryDirectory() as td:
+            work,products,pages=self._build_with_photos(td,rows,['gloss','b'])
+            self.assertIn(['SKU-00001','SKU-00002','SKU-00003'],[sorted(x['skus']) for x in pages])
+            self.assertIn(['SKU-00004'],[x['skus'] for x in pages]);self.assertIn(['SKU-00005'],[x['skus'] for x in pages])
+            report=sync.verify(work,products);self.assertEqual(report['references'],5)
+            import fitz
+            doc=fitz.open(work/sync.PDF);page=next(x for x in pages if len(x['skus'])==3)
+            text=doc[page['page']-1].get_text()
+            for tone in ('FRESA','COCO','UVA'):self.assertIn(tone,text)
+            self.assertIn('GLOSS MIMOSA',text)
+
+    def test_sku_is_not_visible_but_stays_searchable(self):
+        import pikepdf
+        foto='https://drive.google.com/file/d/f/view'
+        rows=[row(SKU=f'SKU-0000{i}',nombre='LABIAL MATE',tono=t,imagen_url=foto) for i,t in ((1,'Rojo'),(2,'Nude'))]
+        with tempfile.TemporaryDirectory() as td:
+            work,products,pages=self._build_with_photos(td,rows,['f'])
+            with pikepdf.open(work/sync.PDF) as pdf:
+                content=pdf.pages[pages[0]['page']-1].Contents.read_bytes()
+            # Cada SKU se escribe en modo de texto 3 (invisible) y el modo vuelve a 0 para el resto de la página.
+            self.assertEqual(content.count(b'3 Tr'),2);self.assertGreaterEqual(content.count(b'0 Tr'),2)
+            report=sync.verify(work,products);self.assertEqual(report['references'],2)
+
     def test_landing_page_is_mobile_friendly_and_has_download_fallback(self):
         page=(sync.ROOT/sync.DOWNLOAD_PAGE).read_text(encoding='utf-8')
         self.assertIn('name="viewport"',page)
@@ -116,6 +160,12 @@ class SyncTests(unittest.TestCase):
         self.assertIn('Logotipo oficial de ByFly Makeup',page)
         self.assertIn('Guardar en Archivos',page)
         self.assertIn('Mostrar vista previa',page)
+        # Los botones funcionan aunque la página se abra fuera del dominio del catálogo.
+        self.assertIn("HOST='catalogo.byfly.com.co'",page)
+        # Aviso para el navegador interno de Instagram/Facebook/TikTok, que no abre PDF.
+        self.assertIn('id="inapp"',page);self.assertIn('Abrir en Chrome',page);self.assertIn('Copiar enlace',page)
+        # Siempre la versión publicada: ?v=<huella> de actualizacion.json.
+        self.assertIn('/actualizacion.json',page)
 
     def test_publish_generated_pdf_bytes_to_both_stable_urls(self):
         from reportlab.pdfgen import canvas

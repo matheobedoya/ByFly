@@ -9,6 +9,7 @@
 <style>
 :root{--ink:#30242b;--muted:#786a71;--rose:#b84f72;--rose-deep:#8f3857;--blush:#fbf4f6;--line:#ead8df;--paper:#fffefd;--soft:#f8eaf0}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{min-height:100%;background:var(--blush)}
 body{margin:0;min-height:100svh;padding:clamp(16px,4vw,46px);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:radial-gradient(ellipse at 50% -15%,#f1d5df 0,transparent 48%),linear-gradient(180deg,#fbf6f7 0%,#f8eff2 100%)}
 .shell{width:min(100%,900px);margin:0 auto}
@@ -36,8 +37,14 @@ h1{margin:0 auto 14px;max-width:650px;font-family:Georgia,"Times New Roman",seri
 .preview p{margin:0 0 16px;text-align:center;color:var(--muted);font-size:12px;line-height:1.6}
 .preview-frame{overflow:hidden;border:1px solid #e8d7de;border-radius:15px;background:#f4edf0;box-shadow:0 9px 24px rgba(90,54,68,.07)}
 iframe{display:block;width:100%;height:min(78vh,850px);min-height:420px;border:0;background:#fff}
+.preview-help{margin:12px 0 0;text-align:center;font-size:12px;color:var(--muted)}
+.preview-help a{color:var(--ink);font-weight:600}
 .note{margin:16px auto 0;max-width:620px;padding:14px 16px;border:1px solid #ecdde3;border-radius:14px;background:#fffafc;color:#74636c;font-size:12px;line-height:1.7}
 .note strong{color:var(--ink)}
+.inapp{margin:16px auto 0;max-width:620px;padding:16px;border:1px solid #e3c5d1;border-radius:14px;background:#fff3f6;color:var(--ink);font-size:13px;line-height:1.6;text-align:left}
+.inapp strong{display:block;margin-bottom:4px;color:var(--rose-deep)}
+.inapp .actions{margin-top:12px}
+.inapp .link-box{display:block;margin-top:10px;padding:8px 10px;border:1px dashed #d9b3c2;border-radius:10px;background:#fff;font-size:12px;word-break:break-all;user-select:all;-webkit-user-select:all}
 .foot{padding:0 18px 25px;text-align:center;color:#9b8991;font-size:10px;letter-spacing:.08em}
 @media(max-width:580px){body{padding:12px}.topline{padding:3px 5px;font-size:9px}.card{border-radius:23px}.hero{padding:32px 20px 28px}.brand-logo{width:min(100%,290px)}.actions{grid-template-columns:1fr;gap:10px}.action{min-height:58px}.preview{margin:0 12px 14px;padding:18px 10px}iframe{height:68vh;min-height:360px}}
 @media(prefers-reduced-motion:reduce){.action{transition:none}}
@@ -54,40 +61,121 @@ iframe{display:block;width:100%;height:min(78vh,850px);min-height:420px;border:0
       <p class="intro">Explora la colección ByFly Makeup, consulta referencias, tonos y precios. Puedes visualizar el catálogo en línea o guardar el PDF completo en tu dispositivo.</p>
       <div class="rule"></div>
       <div class="actions">
-        <a class="action action-primary" href="/ByFly_Catalogo.pdf" target="_blank" rel="noopener">
+        <a class="action action-primary" id="btn-ver" href="/ByFly_Catalogo.pdf" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/></svg>
           Ver catálogo
         </a>
-        <a class="action action-secondary" href="/ByFly_Catalogo_Download.pdf" download="ByFly_Catalogo.pdf">
+        <a class="action action-secondary" id="btn-descargar" href="/ByFly_Catalogo_Download.pdf" download="ByFly_Catalogo.pdf">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19v2h16v-2"/></svg>
           Descargar PDF
         </a>
+      </div>
+      <div class="inapp" id="inapp" hidden>
+        <strong>Abre esta página en tu navegador</strong>
+        Estás viendo la página dentro de una app (Instagram, Facebook, TikTok…). Su navegador interno no muestra ni descarga archivos PDF.
+        <span id="inapp-ios">Toca los tres puntos <b>···</b> de arriba y elige «Abrir en el navegador» (Safari).</span>
+        <div class="actions">
+          <a class="action action-primary" id="inapp-chrome" href="#" hidden>Abrir en Chrome</a>
+          <button class="action action-secondary" id="inapp-copy" type="button" style="cursor:pointer">Copiar enlace</button>
+        </div>
+        <span class="link-box" id="inapp-link">https://catalogo.byfly.com.co/descargar.html</span>
       </div>
       <div class="meta"><span>Un solo PDF para móvil y computador</span><span>Precios en COP</span></div>
       <div class="note"><strong>¿Estás en iPhone?</strong> Para guardar el catálogo, pulsa «Descargar PDF». Si Safari abre una vista previa, toca Compartir y luego «Guardar en Archivos». Para leerlo sin guardarlo, utiliza «Ver catálogo».</div>
     </section>
     <section class="preview" aria-labelledby="preview-title">
       <h2 id="preview-title">Vista previa del catálogo</h2>
-      <p>El visor se carga al solicitarlo para no consumir datos móviles antes de tiempo.</p>
+      <p id="preview-text">El visor se carga al solicitarlo para no consumir datos móviles antes de tiempo.</p>
       <div class="actions" style="max-width:300px;margin-bottom:16px">
         <button class="action action-secondary" id="load-preview" type="button" style="width:100%;cursor:pointer">Mostrar vista previa</button>
       </div>
       <div class="preview-frame" id="preview-frame" hidden>
         <iframe id="pdf-preview" title="Vista previa del catálogo ByFly Makeup" loading="lazy"></iframe>
       </div>
+      <p id="preview-help" class="preview-help" hidden>¿No ves la vista previa? <a href="/ByFly_Catalogo.pdf" target="_blank" rel="noopener">Abre el catálogo en una pestaña nueva</a>.</p>
     </section>
     <div class="foot">BYFLY MAKEUP · BELLEZA PARA CADA VERSIÓN DE TI</div>
   </main>
 </div>
 <script>
-document.getElementById('load-preview').addEventListener('click', function() {
-  const frame=document.getElementById('preview-frame');
-  const iframe=document.getElementById('pdf-preview');
-  if (!iframe.src) iframe.src='/ByFly_Catalogo.pdf#view=FitH';
-  frame.hidden=false;
-  this.textContent='Vista previa cargada';
-  this.disabled=true;
-});
+(function(){
+  // Dominio oficial del catálogo. Los botones apuntan a rutas fijas: /ByFly_Catalogo.pdf (ver) y
+  // /ByFly_Catalogo_Download.pdf (descargar). Son siempre las mismas direcciones; solo cambia el contenido.
+  var HOST='catalogo.byfly.com.co',BASE='https://'+HOST;
+  var ua=navigator.userAgent||'';
+  // iPadOS se presenta como Mac con pantalla táctil.
+  var movil=/Android|iPhone|iPad|iPod|Mobile|Silk/i.test(ua)||(/Mac/i.test(navigator.platform||'')&&navigator.maxTouchPoints>1);
+  var android=/Android/i.test(ua);
+  // Navegadores internos de redes sociales: no muestran ni descargan PDF.
+  var enApp=/FBAN|FBAV|FB_IAB|FBIOS|Instagram|TikTok|musical_ly|BytedanceWebview|Snapchat|Pinterest|LinkedInApp|Line\//i.test(ua);
+  // Si la página se abre fuera de catalogo.byfly.com.co (copiada en otra web, abierta como archivo, etc.),
+  // se usan direcciones completas para que los botones sigan llevando al PDF real.
+  var origen=(location.hostname===HOST)?'':BASE;
+  var urls={ver:origen+'/ByFly_Catalogo.pdf',descargar:origen+'/ByFly_Catalogo_Download.pdf'};
+  var ver=document.getElementById('btn-ver');
+  var descargar=document.getElementById('btn-descargar');
+  var ayudaLink=document.querySelector('#preview-help a');
+  var boton=document.getElementById('load-preview');
+  var frame=document.getElementById('preview-frame');
+  var iframe=document.getElementById('pdf-preview');
+  var ayuda=document.getElementById('preview-help');
+  function aplicar(){ver.href=urls.ver;descargar.href=urls.descargar;ayudaLink.href=urls.ver;}
+  aplicar();
+
+  // Versión al día: actualizacion.json (sin caché) dice cuál es el PDF publicado. Se añade ?v=<huella> a los
+  // enlaces para que ni el teléfono ni Cloudflare entreguen una copia anterior. Solo se aplica si el servidor
+  // confirma que esa dirección responde con un PDF; si algo falla, los enlaces quedan como están.
+  try{
+    if(window.fetch){
+      fetch(origen+'/actualizacion.json',{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(s){
+        var h=s&&s.pdf_sha256;
+        if(!h||!/^[0-9a-f]{64}$/.test(h))return;
+        var v='?v='+h.slice(0,16);
+        return fetch(urls.ver+v,{method:'HEAD',cache:'no-store'}).then(function(r){
+          if(r.ok&&(r.headers.get('content-type')||'').indexOf('application/pdf')===0){
+            urls.ver+=v;urls.descargar+=v;aplicar();
+          }
+        });
+      }).catch(function(){});
+    }
+  }catch(e){}
+
+  if(enApp){
+    var aviso=document.getElementById('inapp');
+    var pagina=BASE+'/descargar.html';
+    aviso.hidden=false;
+    if(android){
+      document.getElementById('inapp-ios').hidden=true;
+      var chrome=document.getElementById('inapp-chrome');
+      chrome.href='intent://'+HOST+'/descargar.html#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(pagina)+';end';
+      chrome.hidden=false;
+    }
+    var copiar=document.getElementById('inapp-copy');
+    copiar.addEventListener('click',function(){
+      function hecho(){copiar.textContent='Enlace copiado ✓';}
+      function manual(){
+        var r=document.createRange();r.selectNodeContents(document.getElementById('inapp-link'));
+        var sel=window.getSelection();sel.removeAllRanges();sel.addRange(r);
+        try{if(document.execCommand('copy')){hecho();return;}}catch(e){}
+        copiar.textContent='Mantén pulsado el enlace para copiarlo';
+      }
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(pagina).then(hecho,manual);}
+      else manual();
+    });
+  }
+
+  if(movil){
+    document.getElementById('preview-text').textContent='En celulares y tabletas el catálogo se abre directamente en el visor de tu dispositivo.';
+    boton.textContent='Abrir catálogo';
+    boton.addEventListener('click',function(){window.location.href=urls.ver;});
+    return;
+  }
+  boton.addEventListener('click',function(){
+    if(!iframe.getAttribute('src'))iframe.setAttribute('src',urls.ver+'#view=FitH');
+    frame.hidden=false;ayuda.hidden=false;
+    boton.textContent='Vista previa cargada';boton.disabled=true;
+  });
+})();
 </script>
 </body>
 </html>

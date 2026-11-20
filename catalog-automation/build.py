@@ -29,6 +29,50 @@ def addition_order(product):
  # numérico, se usa la posición original de la fila como respaldo.
  match=__import__('re').search(r'(\d+)$',product['sku'])
  return int(match.group(1)) if match else source_order[product['sku']]
+# En la hoja, algunos tonos del mismo producto están escritos con nombres distintos ("GLOSS X FRESA",
+# "GLOSS X COCO") y comparten la misma foto. Antes cada uno ocupaba su propia página con la foto repetida.
+# Se unen en una sola ficha cuando coinciden la categoría, la marca y la foto de portada, y sus nombres
+# empiezan con las mismas palabras. El título es la parte común y el resto del nombre se muestra como tono.
+# Si los nombres no tienen palabras en común, no se unen (se conservan como estaban).
+def _cover_photo(family):
+ return (family[0].get('family_images') or [None])[0]
+def _common_words(names):
+ words=[n.upper().split() for n in names];common=0
+ for parts in zip(*words):
+  if len(set(parts))!=1:break
+  common+=1
+ return common
+_TONE_WORDS={'TONO','TONOS','COLOR','COLORES','REF','REFERENCIA','N°','NO','NRO','NUM','#','-','DE','EN'}
+def merge_same_photo(families):
+ groups=collections.OrderedDict()
+ for key,family in families.items():
+  photo=_cover_photo(family)
+  groups.setdefault((key[0],key[2],photo) if photo else ('solo',)+key,[]).append(family)
+ merged=collections.OrderedDict()
+ for gkey,fams in groups.items():
+  names=list(dict.fromkeys(f[0]['name'].strip() for f in fams))
+  n=_common_words(names) if len(fams)>1 else 0
+  # "SOMBRA TONO 1" / "SOMBRA TONO 2": la palabra "TONO" va con el tono, no en el título.
+  while n>1 and fams[0][0]['name'].split()[n-1].upper().strip('.:') in _TONE_WORDS:n-=1
+  if len(fams)==1 or n==0:
+   for f in fams:merged[(gkey,f[0]['name'].upper())]=f
+   continue
+  title=' '.join(fams[0][0]['name'].split()[:n])
+  family=[]
+  for f in fams:
+   for q in f:
+    rest=' '.join(q['name'].split()[n:]).strip();tone=(q.get('tone') or '').strip()
+    if rest and tone and rest.upper()!=tone.upper() and rest.upper() not in tone.upper():q['_tone']=rest+' · '+tone
+    else:q['_tone']=tone or rest
+    q['_display_name']=title
+    family.append(q)
+  merged[gkey]=family
+ return merged
+_families=merge_same_photo(_families)
+def shown_name(p):return p.get('_display_name') or p['name']
+def shown_tone(q,family):
+ tone=q.get('_tone',q['tone']) or ('Sin tono indicado' if len(family)>1 else 'Única')
+ return tone[:-2] if tone.endswith('.0') else tone
 F=[];_recent_families=[]
 for family in _families.values():
  chunks=[family[i:i+6] for i in range(0,len(family),6)]
@@ -110,6 +154,13 @@ class Edition(Catalog):
     if isinstance(obj,PDFImageXObject) and obj.colorSpace=='DeviceRGB' and (obj.width,obj.height)==size and getattr(obj,'smask',None):
      obj.streamContent=zlib.compress(rgb*(obj.width*obj.height));obj._filters=('FlateDecode',)
    self.logo_colored=True
+ def hidden_sku(self,x,y,sku):
+  # Modo de texto 3 = invisible (como la capa de texto de un PDF escaneado). La cliente no lo ve, pero la
+  # verificación automática y el buscador del lector (Ctrl+F "SKU-00123") lo siguen encontrando.
+  # saveState/restoreState y el regreso al modo 0 evitan que el resto del texto de la página quede invisible.
+  self.c.saveState()
+  t=self.c.beginText(x,y);t.setTextRenderMode(3);t.setFont('Arsenal-Regular',8);t.textOut(sku);t.setTextRenderMode(0)
+  self.c.drawText(t);self.c.restoreState()
  def emoji(self,name,x,y,size=23):
   self.c.drawImage(str(ASSETS/('emoji-'+name+'.png')),x,y,size,size,mask='auto')
  def head(self,title,subtitle=''):
@@ -128,7 +179,7 @@ class Edition(Catalog):
   self.text(w/2,h-253,'Aprender y mejorar para transformarte a ti misma.',16,'Karma-Regular',DARK,'center')
   picks=[]
   for needle in ['BASE ANI-K','GLOSS MIMOSA XL','RUBOR AURA']:
-   f=next((f for f in F if needle==f[0]['name'] and f[0]['family_images']),None)
+   f=next((f for f in F if any(needle==q['name'] for q in f) and f[0]['family_images']),None)
    if f:picks.append(PH[f[0]['family_images'][0]])
   for i,path in enumerate(picks):self.img(path,28+i*173,163,159,238,r=12)
   self.text(w/2,129,'Belleza para cada versión de ti.',17,'Karma-Regular',DARK,'center')
@@ -150,9 +201,9 @@ class Edition(Catalog):
     photo_h=ch-62
     if paths:self.img(paths[0],x+6,y+58,cw-12,photo_h-6,r=7)
     self.text(x+9,y+43,p['brand'],9,'Arsenal-Bold',DARK)
-    self.para(x+9,y+33,label(p['name']),cw-18,10,'Arsenal-Regular',INK,12)
+    self.para(x+9,y+33,label(shown_name(p)),cw-18,10,'Arsenal-Regular',INK,12)
     self.c.linkRect('','product-'+p['sku'],(x,y,x+cw,y+ch),thickness=0)
-   self.text(28,53,'Toca una imagen para ir a su ficha. Cada SKU aparece una sola vez en las fichas.',10,color=MUTED)
+   self.text(28,53,'Toca una imagen para ir a su ficha.',10,color=MUTED)
    if block+1<self.newpages:self.small(self.w-122,75,94,'Más novedades',f'news{block+1}')
    self.footer()
  def info(self):
@@ -193,7 +244,7 @@ class Edition(Catalog):
   self.head(p['category'])
   x=28;tw=w-56
   self.text(x,h-106,p['brand'] or 'BYFLY MAKEUP',10,'Arsenal-Bold',DARK)
-  tb=self.para(x,h-119,label(p['name']),tw,24,'Karma-Medium',INK,27)
+  tb=self.para(x,h-119,label(shown_name(p)),tw,24,'Karma-Medium',INK,27)
   note_y=tb-13
   part=p.get('_family_part',2);parts=p.get('_family_parts',2)
   self.text(x,note_y,f'Continuación de referencias {part} de {parts} · La imagen aparece en la primera ficha.',10,color=MUTED)
@@ -208,20 +259,18 @@ class Edition(Catalog):
   else:
    self.text(x,y,'PRECIOS POR VARIANTE · COP',9,'Arsenal-Bold',DARK)
    y-=20
-  self.text(x,y,'REFERENCIA',9,'Arsenal-Bold',MUTED)
-  self.text(x+105,y,'TONO / VARIANTE',9,'Arsenal-Bold',MUTED)
+  self.text(x,y,'TONO / VARIANTE',9,'Arsenal-Bold',MUTED)
   self.text(w-28,y,'ESTADO',9,'Arsenal-Bold',MUTED,'right')
   y-=18
   for q in f:
    row_h=39 if same else 43
    bottom=y-row_h+4
    self.box(x,bottom,tw,row_h,'#FFF8FA',stroke=LINE,r=7)
-   self.text(x+10,bottom+row_h-15,q['sku'],10,'Arsenal-Bold',DARK)
-   tone=q['tone'] or ('Sin tono indicado' if len(f)>1 else 'Única')
-   tone=tone[:-2] if tone.endswith('.0') else tone
-   maxwidth=tw-235
+   tone=shown_tone(q,f)
+   maxwidth=tw-140
    fs=min(12,maxwidth/max(pdfmetrics.stringWidth(tone,'Arsenal-Regular',1),1))
-   self.text(x+105,bottom+row_h-15,tone,fs,'Arsenal-Regular',INK)
+   self.text(x+10,bottom+row_h-15,tone,fs,'Arsenal-Regular',INK)
+   self.hidden_sku(x+10+pdfmetrics.stringWidth(tone,'Arsenal-Regular',fs)+10,bottom+row_h-15,q['sku'])
    self.text(w-38,bottom+row_h-15,'Disponible' if q['available'] else 'AGOTADO',10,'Arsenal-Bold',DARK if q['available'] else MUTED,'right')
    if not same:
     price_line='Detal '+(money(q['retail']) if q['retail']>0 else 'Consultar')+' · Mayorista '+(money(q['wholesale']) if q['wholesale']>0 else 'Consultar')
@@ -247,7 +296,7 @@ class Edition(Catalog):
   if p['imported']:tags.append('IMPORTADO')
   if tags:self.text(w-28,h-76,' · '.join(tags),9,'Arsenal-Bold',DARK,'right')
   size=23 if self.desktop else 24
-  tb=self.para(x,top-13,label(p['name']),tw,size,'Karma-Medium',INK,size*1.12)
+  tb=self.para(x,top-13,label(shown_name(p)),tw,size,'Karma-Medium',INK,size*1.12)
   same=len(set((q['retail'],q['wholesale']) for q in f))==1
   rowh=(18 if len(f)>8 else 21) if same else 40
   table_h=24+len(f)*rowh
@@ -273,15 +322,16 @@ class Edition(Catalog):
     self.text(x+offset,y,t,9,'Arsenal-Bold',MUTED);self.text(x+offset,y-26,money(price) if price>0 else 'Consultar',24,'Arsenal-Bold',DARK)
    y-=55
   else:self.text(x,y,'PRECIOS POR VARIANTE · COP',9,'Arsenal-Bold',DARK);y-=18
-  columns=[(0,'REFERENCIA'),(tw*.28,'TONO / VARIANTE'),(tw,'ESTADO')]
+  columns=[(0,'TONO / VARIANTE'),(tw,'ESTADO')]
   for xx,title in columns:self.text(x+xx,y,title,10,'Arsenal-Bold',MUTED,'right' if xx==tw else 'left')
   y-=20
   for q in f:
-   self.text(x,y,q['sku'],12.5 if len(f)>8 else 14,color=INK)
-   tone=q['tone'] or ('Sin tono indicado' if len(f)>1 else 'Única');tone=tone[:-2] if tone.endswith('.0') else tone
-   tx=x+tw*.28;maxwidth=tw*.43
+   tone=shown_tone(q,f)
+   tx=x;maxwidth=tw*.71
    fs=min(13 if len(f)>8 else 15,maxwidth/max(pdfmetrics.stringWidth(tone,'Arsenal-Regular',1),1))
    self.text(tx,y,tone,fs,color=INK)
+   # El SKU va invisible justo después del tono, en la misma línea, para que se lea como "tono SKU-00123".
+   self.hidden_sku(tx+pdfmetrics.stringWidth(tone,'Arsenal-Regular',fs)+10,y,q['sku'])
    self.text(x+tw,y,'Disponible' if q['available'] else 'AGOTADO',11 if len(f)>8 else 12,'Arsenal-Bold',DARK if q['available'] else MUTED,'right')
    if not same:
     self.text(x,y-18,'Detal '+(money(q['retail']) if q['retail'] else 'Consultar'),14,'Arsenal-Bold',DARK)
@@ -290,7 +340,7 @@ class Edition(Catalog):
   if self.desktop and len(paths)>1 and y>220:
    for i,path in enumerate(paths[1:3]):self.img(path,x+i*(tw/2+5),88,tw/2-8,min(170,y-112),r=8)
   if y<54:raise ValueError(('Table overflow',p['sku'],y))
-  if len(f)>1:self.text(gx,gy-12 if self.desktop else 49,'Imagen de referencia de la familia; verifica el tono por SKU.',9,color=MUTED)
+  if len(f)>1:self.text(gx,gy-12 if self.desktop else 49,'Imagen de referencia de la familia; verifica el tono en la lista.',9,color=MUTED)
   elif self.desktop:self.text(gx,gy-12,'Imagen de referencia del producto.',9,color=MUTED)
   if self.desktop:self.text(x,55,'Precios y disponibilidad sujetos a confirmación.',9,color=MUTED)
   self.qa.append({'page':self.page,'skus':[q['sku'] for q in f],'category':p['category'],'image':bool(paths),'images_drawn':1 if paths else 0,'continuation':False,'family_part':p.get('_family_part',1),'family_parts':p.get('_family_parts',1),'lowest_y':y,'image_height':gh})

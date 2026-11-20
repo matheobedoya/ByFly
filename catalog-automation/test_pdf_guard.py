@@ -82,6 +82,28 @@ class GuardFileTests(unittest.TestCase):
         with self.assertRaises(pdf_guard.PdfGuardError):
             pdf_guard.finalize(path)
 
+    def test_linearize_keeps_content_and_strict_validity(self):
+        path = make_pdf(self.p("ok.pdf"), pages=5)
+        with pikepdf.open(path) as pdf:
+            before = [page.Contents.read_bytes() for page in pdf.pages]
+        self.assertTrue(pdf_guard.linearize(path))
+        problems, info = pdf_guard.inspect(path)
+        self.assertEqual(problems, [])
+        self.assertTrue(info["linearized"])
+        self.assertEqual(info["pages"], 5)
+        with pikepdf.open(path) as pdf:
+            self.assertEqual([page.Contents.read_bytes() for page in pdf.pages], before)
+            self.assertEqual(str(pdf.Root.PageLayout), "/SinglePage")
+        self.assertTrue(pdf_guard.linearize(path))  # repetirlo no daña nada
+
+    def test_linearize_never_breaks_on_bad_input(self):
+        path = self.p("fake.pdf")
+        with open(path, "wb") as f:
+            f.write(b"<!doctype html><html><body>404</body></html>")
+        before = pdf_guard.sha256_file(path)
+        self.assertFalse(pdf_guard.linearize(path))
+        self.assertEqual(pdf_guard.sha256_file(path), before)
+
     def test_truncated_pdf_is_rejected(self):
         path = make_pdf(self.p("ok.pdf"), pages=20)
         size = os.path.getsize(path)
@@ -94,19 +116,23 @@ class GuardFileTests(unittest.TestCase):
 class _Handler(BaseHTTPRequestHandler):
     pdf_bytes = b""
     serve_html_instead_of_pdf = False
+    reject_query = False
 
     def log_message(self, *a):  # silencio
         pass
 
     def do_GET(self):
         cls = type(self)
-        if self.path == "/descargar.html":
+        path, _, query = self.path.partition("?")
+        if query and cls.reject_query:
+            return self._send(404, b"nf", "text/plain")
+        if path == "/descargar.html":
             body = b'<a href="/ByFly_Catalogo.pdf">v</a><a href="/ByFly_Catalogo_Download.pdf">d</a>'
             return self._send(200, body, "text/html")
-        if self.path in ("/ByFly_Catalogo.pdf", "/ByFly_Catalogo_Download.pdf"):
+        if path in ("/ByFly_Catalogo.pdf", "/ByFly_Catalogo_Download.pdf"):
             if cls.serve_html_instead_of_pdf:
                 return self._send(200, b"<html>error</html>", "text/html")
-            disp = 'attachment; filename="ByFly_Catalogo.pdf"' if "Download" in self.path else 'inline; filename="ByFly_Catalogo.pdf"'
+            disp = 'attachment; filename="ByFly_Catalogo.pdf"' if "Download" in path else 'inline; filename="ByFly_Catalogo.pdf"'
             if self.headers.get("Range"):
                 return self._send(206, cls.pdf_bytes[:1024], "application/pdf", disp)
             return self._send(200, cls.pdf_bytes, "application/pdf", disp)
@@ -123,13 +149,14 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class PublicCheckTests(unittest.TestCase):
-    def _serve(self, html_instead):
+    def _serve(self, html_instead, reject_query=False):
         d = tempfile.TemporaryDirectory()
         self.addCleanup(d.cleanup)
         path = make_pdf(os.path.join(d.name, "ok.pdf"))
         with open(path, "rb") as f:
             _Handler.pdf_bytes = f.read()
         _Handler.serve_html_instead_of_pdf = html_instead
+        _Handler.reject_query = reject_query
         srv = HTTPServer(("127.0.0.1", 0), _Handler)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         self.addCleanup(srv.shutdown)
@@ -158,6 +185,11 @@ class PublicCheckTests(unittest.TestCase):
         import hashlib
         problems, warnings = self._check(base, expect_sha256=hashlib.sha256(_Handler.pdf_bytes).hexdigest())
         self.assertEqual((problems, warnings), ([], []))
+
+    def test_public_warns_if_versioned_links_are_not_supported(self):
+        problems, warnings = self._check(self._serve(False, reject_query=True))
+        self.assertEqual(problems, [])  # los enlaces normales funcionan: solo es un aviso
+        self.assertTrue(any("?v=" in w for w in warnings), warnings)
 
 
 if __name__ == "__main__":
